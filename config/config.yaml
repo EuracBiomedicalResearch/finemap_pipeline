@@ -1,0 +1,42 @@
+# Genotype position definition
+genodata: 
+  json: "/scratch/mfilosi/test_gwas_regenie/genetic_data.json"
+  name: "HRC13K"
+
+# Sample file to use
+# ------------------
+# See https://www.cog-genomics.org/plink/1.9/filter#indiv
+# for details on the sample file
+sample_file: "<path_to_sample_file>/sample.samplist"
+
+# Phenotype file used in the GWAS
+# -------------------------------
+# tab separated.
+# First two colums should be FID and IID
+pheno_file: "/scratch/mfilosi/metaboGWAS/input_files/phenotype_filt_winsorized_scaled.txt"
+
+
+# Clumping
+# --------
+# NB: logp1 and logp2 will only work with plink2
+clumping:
+  # logp1: 10.769551078621726
+  logp1: 7.3
+  logp2: 1.3010299956639813
+  r2: 0.1
+  kb: 10000
+  p1: 1.7e-11
+  p2: 0.05
+
+
+# Summary Statistic
+# -----------------
+# Define where the summary stat results will be found
+# which is the pvalue column and the threshold to use to define
+# putative credible sets
+# Option log: True not implemented for now
+sumstat:
+  resdir: "/scratch/mfilosi/test_gwas_regenie/metaboGWAS"
+  pvalcol: "LOG10P"
+  log: True
+  pthr: 1.7e-11
