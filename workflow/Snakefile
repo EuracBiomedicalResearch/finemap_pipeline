@@ -1,0 +1,184 @@
+import os
+import json
+import glob
+from os.path import join as pjoin
+
+# Define configuration file
+configfile: "config/config.yaml"
+
+# TODO: Need to validate the inputs....
+
+# Define wildcards for chromosomes 
+wildcard_constraints:
+      chrom="\d+"
+
+# Load genetic data information
+genotype = config["genodata"]["name"]
+with open(config["genodata"]["json"], "r") as f:
+  tmp = json.load(f)
+gd = tmp[genotype]
+
+plinkpath = {p for p in gd["plinkfiles"]}.pop()
+# genopath = "/scratch/compgen/data/genetics/CHRIS13K/Imputation/HRC"
+# plinkpath = pjoin(genopath, "plinkFormat")
+# plinkpath = config["genotype"]{'plinkFormat'}
+
+resdir = config["sumstat"]["resdir"]
+# "/scratch/mfilosi/test_gwas_regenie/metaboGWAS"
+pvalcol = config["sumstat"]["pvalcol"]
+pthr = config["sumstat"]["pthr"]
+
+
+def get_pfile_from_chrom(wildcards):
+  pfiles = gd['plinkfiles']
+  ff = [p for p in pfiles if p.find(f'chr{wildcards.chrom}.') > 0]
+  return ff[0]
+
+# Function to get the phenotypes
+def get_pheno_to_run():
+  fnames = glob.glob(pjoin(resdir, "*.regenie.gz.tbi"))
+  phenos = [os.path.basename(f) for f in fnames]
+  phenos = [p.replace(".regenie.gz.tbi", "") for p in phenos]
+  return phenos[0]
+
+  
+# Target rule
+rule all:
+  input:
+    "results/all_phenos_summary.cs"
+
+    # expand("results/{pheno}/summary.cs", 
+    #        pheno=get_pheno_to_run())
+           # pheno=['meta_6']#, "meta_1", "meta_2", "meta_4", "meta_5", "meta_7",
+           #        # "meta_8", "meta_10"])
+           # )
+
+checkpoint sumstat_2_plink:
+  message:
+    "Separate summary stat by chromosome"
+  input:
+    sumstat = pjoin(resdir, "{pheno}.regenie.gz")
+  output:
+    directory("results/{pheno}/tmp")
+  resources:
+    mem_mb=12000
+  params:
+    pval_thr = pthr,
+    pval_col = pvalcol
+  script:
+    "scripts/separate_gwas.py" #-i {snakemake.input.sumstat} "
+    # "-o {output[0]} --pcol {params.pvalcol} --pthr {params.pval_thr} "
+    # "--pheno {wildcards.pheno}"
+
+
+def get_significant(wildcards):
+  """
+  Exctract the chromosome available for each summary stat
+  """
+  ckoutput = checkpoints.sumstat_2_plink.get(**wildcards).output[0]
+  clfiles = expand("results/{pheno}/cs/cs_chr{chrom}.cssmstat",
+                   pheno=wildcards.pheno,
+                   chrom=glob_wildcards(pjoin(ckoutput, "chr{chrom}_sumstat.csv")).chrom
+                   )
+  return clfiles
+
+
+rule cut_pheno:
+  input:
+    phenofile = config["pheno_file"]
+  output:
+    "results/{pheno}/tmp/phenotype.csv"
+  conda:
+    "plink-pandas"
+  script:
+    "scripts/separate_pheno.py" # --phenofile {input.phenofile} "
+    # "--outfile {output} --pheno {wildcards.pheno}"
+
+rule clumping:
+  message:
+    "Run clumping"
+  input:
+    smstat = "results/{pheno}/tmp/chr{chrom}_sumstat.csv"
+    # geno = pjoin(plinkpath, "chr{chrom}.forgwas.nofid.bed")
+  output:
+    "results/{pheno}/clumping/chr{chrom}.clumps",
+    "results/{pheno}/clumping/chr{chrom}.log"
+  params:
+    # infile = lambda wildcards, input : input.geno.replace(".bed", ""),
+    infile = get_pfile_from_chrom,
+    ofile = lambda wildcards, output : output[0].replace(".clumps", ""),
+    clump_logp1 = config["clumping"]["logp1"],
+    clump_logp2 = config["clumping"]["logp2"],
+    clump_r2 = config["clumping"]["r2"],
+    clump_kb = config["clumping"]["kb"],
+    sampfile = config["sample_file"]
+  resources:
+    mem_mb = 16000
+  conda:
+    "plink2"
+  shell:
+    """plink2 --bfile {params.infile} --clump {input.smstat} \
+    --clump-log10 'input-only' --clump-field {pvalcol} \
+    --clump-log10-p1 {params.clump_logp1} --clump-log10-p2 {params.clump_logp2} \
+    --clump-r2 {params.clump_r2} --clump-kb {params.clump_kb} \
+    --clump-snp-field ID  --out {params.ofile} \
+    --memory {resources.mem_mb} \
+    --keep {params.sampfile}
+    """
+
+rule enlarge_and_merge:
+  input:
+    rules.clumping.output[0],
+  output:
+    "results/{pheno}/ld/chr{chrom}.ld"
+  params:
+    plinkfile = get_pfile_from_chrom
+  conda:
+    "plink-pandas"
+  resources:
+    mem_mb=16000
+  script:
+    "scripts/run_susieR.py"
+
+rule run_susieR:
+  input:
+    ldfile = rules.enlarge_and_merge.output,
+    smstat = "results/{pheno}/tmp/chr{chrom}_sumstat.csv",
+    phenofile = rules.cut_pheno.output
+  output:
+    cs_smstat = "results/{pheno}/cs/cs_chr{chrom}.cssmstat",
+    cs_report = "results/{pheno}/cs/cs_chr{chrom}.csreport",
+    cs_rds = "results/{pheno}/cs/cs_chr{chrom}_fit.rds"
+  resources:
+    mem_mb=16000
+  conda:
+    "susier"
+  script:
+    "scripts/finemapping.R"
+
+rule collect_by_pheno:
+  input:
+    get_significant
+  output:
+    "results/{pheno}/summary.cs"
+  resources:
+    mem_mb=12000
+  params:
+    bypheno = False
+  script:
+    "scripts/aggregate_by_pheno.py"
+
+rule collect_all:
+  input:
+    expand("results/{pheno}/summary.cs", pheno=get_pheno_to_run()),
+  output:
+    "results/all_phenos_summary.cs"
+  resources:
+    mem_mb=12000
+  params:
+    bypheno = True
+  conda:
+    "plink-pandas"
+  script:
+    "scripts/aggregate_by_pheno.py" 
+
