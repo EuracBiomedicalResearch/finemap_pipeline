@@ -19,15 +19,15 @@ with open(config["genodata"]["json"], "r") as f:
 gd = tmp[genotype]
 
 plinkpath = {p for p in gd["plinkfiles"]}.pop()
-# genopath = "/scratch/compgen/data/genetics/CHRIS13K/Imputation/HRC"
-# plinkpath = pjoin(genopath, "plinkFormat")
-# plinkpath = config["genotype"]{'plinkFormat'}
 
+# Store config variables for ease access
 resdir = config["sumstat"]["resdir"]
-# "/scratch/mfilosi/test_gwas_regenie/metaboGWAS"
 pvalcol = config["sumstat"]["pvalcol"]
 pthr = config["sumstat"]["pthr"]
+outdir = config["output_dir"]
 
+if not os.path.exists(outdir):
+  os.makedirs(outdir, exist_ok=True)
 
 def get_pfile_from_chrom(wildcards):
   pfiles = gd['plinkfiles']
@@ -47,14 +47,13 @@ rule all:
   input:
     "results/all_phenos_summary.cs"
 
-
 checkpoint sumstat_2_plink:
   message:
     "Separate summary stat by chromosome based on best hits"
   input:
     sumstat = pjoin(resdir, "{pheno}.regenie.gz")
   output:
-    directory("results/{pheno}/tmp")
+    directory(pjoin(outdir, "{pheno}/tmp"))
   resources:
     mem_mb=12000
   params:
@@ -68,7 +67,7 @@ def get_significant(wildcards):
   Exctract the chromosome available for each summary stat
   """
   ckoutput = checkpoints.sumstat_2_plink.get(**wildcards).output[0]
-  clfiles = expand("results/{pheno}/cs/cs_chr{chrom}.cssmstat",
+  clfiles = expand(pjoin(outdir, "{pheno}/cs/cs_chr{chrom}.cssmstat"),
                    pheno=wildcards.pheno,
                    chrom=glob_wildcards(pjoin(ckoutput, "chr{chrom}_sumstat.csv")).chrom
                    )
@@ -81,7 +80,7 @@ rule cut_pheno:
   input:
     phenofile = config["pheno_file"]
   output:
-    "results/{pheno}/tmp/phenotype.csv"
+    pjoin(outdir, "{pheno}/tmp/phenotype.csv")
   conda:
     "plink-pandas"
   script:
@@ -91,10 +90,10 @@ rule clumping:
   message:
     "Run clumping"
   input:
-    smstat = "results/{pheno}/tmp/chr{chrom}_sumstat.csv"
+    smstat = pjoin(outdir, "{pheno}/tmp/chr{chrom}_sumstat.csv")
   output:
-    "results/{pheno}/clumping/chr{chrom}.clumps",
-    "results/{pheno}/clumping/chr{chrom}.log"
+    pjoin(outdir, "{pheno}/clumping/chr{chrom}.clumps"),
+    pjoin(outdir, "{pheno}/clumping/chr{chrom}.log")
   params:
     infile = get_pfile_from_chrom,
     ofile = lambda wildcards, output : output[0].replace(".clumps", ""),
@@ -123,7 +122,7 @@ rule enlarge_and_merge:
   input:
     rules.clumping.output[0],
   output:
-    "results/{pheno}/ld/chr{chrom}.ld"
+    pjoin(outdir, "{pheno}/ld/chr{chrom}.ld")
   params:
     plinkfile = get_pfile_from_chrom,
     totsize = config["clumping"]["totsize"]
@@ -137,12 +136,12 @@ rule enlarge_and_merge:
 rule run_susieR:
   input:
     ldfile = rules.enlarge_and_merge.output,
-    smstat = "results/{pheno}/tmp/chr{chrom}_sumstat.csv",
+    smstat = pjoin(outdir, "{pheno}/tmp/chr{chrom}_sumstat.csv"),
     phenofile = rules.cut_pheno.output
   output:
-    cs_smstat = "results/{pheno}/cs/cs_chr{chrom}.cssmstat",
-    cs_report = "results/{pheno}/cs/cs_chr{chrom}.csreport",
-    cs_rds = "results/{pheno}/cs/cs_chr{chrom}_fit.rds"
+    cs_smstat = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}.cssmstat"),
+    cs_report = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}.csreport"),
+    cs_rds = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}_fit.rds")
   resources:
     mem_mb=16000
   conda:
@@ -154,7 +153,7 @@ rule collect_by_pheno:
   input:
     get_significant
   output:
-    "results/{pheno}/summary.cs"
+    pjoin(outdir, "{pheno}/summary.cs")
   resources:
     mem_mb=12000
   params:
@@ -166,7 +165,7 @@ rule collect_all:
   input:
     expand("results/{pheno}/summary.cs", pheno=get_pheno_to_run()),
   output:
-    "results/all_phenos_summary.cs"
+    pjoin(outdir, "all_phenos_summary.cs")
   resources:
     mem_mb=12000
   params:

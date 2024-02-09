@@ -1,3 +1,7 @@
+# General configuration
+# ---------------------
+output_dir: 'results'
+
 # Genotype position definition
 genodata: 
   json: "/scratch/mfilosi/test_gwas_regenie/genetic_data.json"
