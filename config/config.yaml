@@ -15,7 +15,6 @@ sample_file: "<path_to_sample_file>/sample.samplist"
 # First two colums should be FID and IID
 pheno_file: "/scratch/mfilosi/metaboGWAS/input_files/phenotype_filt_winsorized_scaled.txt"
 
-
 # Clumping
 # --------
 # NB: logp1 and logp2 will only work with plink2
@@ -27,6 +26,7 @@ clumping:
   kb: 10000
   p1: 1.7e-11
   p2: 0.05
+  totsize: 1e6
 
 
 # Summary Statistic
