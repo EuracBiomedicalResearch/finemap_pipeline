@@ -162,4 +162,4 @@ cython_debug/
 # Snakemake
 .snakemake/*
 logs/*
-results/*
+results*
