@@ -24,7 +24,7 @@ plinkpath = {p for p in gd["plinkfiles"]}.pop()
 resdir = config["sumstat"]["resdir"]
 pvalcol = config["sumstat"]["pvalcol"]
 pthr = config["sumstat"]["pthr"]
-outdir = config["outdir"]
+outdir = config["output_dir"]
 
 if not os.path.exists(outdir):
   os.makedirs(outdir, exist_ok=True)
@@ -46,7 +46,6 @@ def get_pheno_to_run():
 rule all:
   input:
     "results/all_phenos_summary.cs"
-
 
 checkpoint sumstat_2_plink:
   message:
