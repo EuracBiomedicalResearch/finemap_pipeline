@@ -39,7 +39,7 @@ def get_pheno_to_run():
   fnames = glob.glob(pjoin(resdir, "*.regenie.gz.tbi"))
   phenos = [os.path.basename(f) for f in fnames]
   phenos = [p.replace(".regenie.gz.tbi", "") for p in phenos]
-  return phenos[0]
+  return phenos
 
   
 # Target rule
@@ -47,15 +47,10 @@ rule all:
   input:
     "results/all_phenos_summary.cs"
 
-    # expand("results/{pheno}/summary.cs", 
-    #        pheno=get_pheno_to_run())
-           # pheno=['meta_6']#, "meta_1", "meta_2", "meta_4", "meta_5", "meta_7",
-           #        # "meta_8", "meta_10"])
-           # )
 
 checkpoint sumstat_2_plink:
   message:
-    "Separate summary stat by chromosome"
+    "Separate summary stat by chromosome based on best hits"
   input:
     sumstat = pjoin(resdir, "{pheno}.regenie.gz")
   output:
@@ -66,10 +61,7 @@ checkpoint sumstat_2_plink:
     pval_thr = pthr,
     pval_col = pvalcol
   script:
-    "scripts/separate_gwas.py" #-i {snakemake.input.sumstat} "
-    # "-o {output[0]} --pcol {params.pvalcol} --pthr {params.pval_thr} "
-    # "--pheno {wildcards.pheno}"
-
+    "scripts/separate_gwas.py"
 
 def get_significant(wildcards):
   """
@@ -84,6 +76,8 @@ def get_significant(wildcards):
 
 
 rule cut_pheno:
+  message:
+    "Extract the phenotype from the original GWAS"
   input:
     phenofile = config["pheno_file"]
   output:
@@ -91,20 +85,17 @@ rule cut_pheno:
   conda:
     "plink-pandas"
   script:
-    "scripts/separate_pheno.py" # --phenofile {input.phenofile} "
-    # "--outfile {output} --pheno {wildcards.pheno}"
+    "scripts/separate_pheno.py"
 
 rule clumping:
   message:
     "Run clumping"
   input:
     smstat = "results/{pheno}/tmp/chr{chrom}_sumstat.csv"
-    # geno = pjoin(plinkpath, "chr{chrom}.forgwas.nofid.bed")
   output:
     "results/{pheno}/clumping/chr{chrom}.clumps",
     "results/{pheno}/clumping/chr{chrom}.log"
   params:
-    # infile = lambda wildcards, input : input.geno.replace(".bed", ""),
     infile = get_pfile_from_chrom,
     ofile = lambda wildcards, output : output[0].replace(".clumps", ""),
     clump_logp1 = config["clumping"]["logp1"],
@@ -127,12 +118,15 @@ rule clumping:
     """
 
 rule enlarge_and_merge:
+  message:
+    "Merge overlapping clumps after enlarging to at least 1Mb"
   input:
     rules.clumping.output[0],
   output:
     "results/{pheno}/ld/chr{chrom}.ld"
   params:
-    plinkfile = get_pfile_from_chrom
+    plinkfile = get_pfile_from_chrom,
+    totsize = config["clumping"]["totsize"]
   conda:
     "plink-pandas"
   resources:

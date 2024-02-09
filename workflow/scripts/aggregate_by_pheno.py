@@ -37,7 +37,7 @@ def main(summary_files, outfile, bypheno=True):
                              mode=wmode)
 
                 # After the first writing set header to false and append mode
-                firstsw = False
+                firstw = False
                 wmode = "a"
         except pd.errors.EmptyDataError:
             continue

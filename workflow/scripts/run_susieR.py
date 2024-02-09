@@ -399,17 +399,18 @@ def sort_and_merge(clumplist):
     return newclumplist
 
 
-
 def main(clumpfile, plinkfile, chr, outfile="",  **kwargs):
+
+    try:
+        totsize = int(kwargs["totsize"])
+    except KeyError:
+        totsize = 1e6
+    except ValueError as e:
+        print("Invalid totsize value. Set it to default: 1e6", e)
+        totsize = 1e6
+
     clumplist = read_clump_file(clumpfile, enlarge=True, merge=True,
                                 totsize=1e6)
-    # The following part has been moved into read_clump_file function with
-    # paramters : enlarge and merge
-    # clumplist_en = [enlarge_clump(cl) for cl in clumplist]
-    # res = sort_and_merge(clumplist_en)
-
-    # genopath = {os.path.dirname(f) for f in gendata.get_plinkfiles()}
-    # genopath = genopath.pop()
 
     # Prepare the file for output
     fout = open(outfile, "w")
@@ -424,6 +425,7 @@ def main(clumpfile, plinkfile, chr, outfile="",  **kwargs):
                                        plinkfile=plinkfile,
                                        prefix=outfile, **kwargs)
 
+        # Check if the written file exists and is not empty
         try:
             if os.path.getsize(genofile) > 0:
                 # Write header if it's the first time writing
@@ -431,7 +433,6 @@ def main(clumpfile, plinkfile, chr, outfile="",  **kwargs):
                     fw.writerow(myheader)
                     firstw = False
                 fw.writerow([chr, i, genofile, snpfile])
-
         except FileNotFoundError:
             pass
 
@@ -445,7 +446,8 @@ if __name__ == "__main__":
                      plinkfile=snakemake.params.plinkfile,
                      outfile=snakemake.output[0],
                      chr=snakemake.wildcards.chrom,
-                     memory=snakemake.resources.mem_mb)
+                     memory=snakemake.resources.mem_mb,
+                     totsize=snakemake.params.totsize)
     # import argparse
     # parser = argparse.ArgumentParser()
 
