@@ -10,7 +10,8 @@ configfile: "config/config.yaml"
 
 # Define wildcards for chromosomes 
 wildcard_constraints:
-      chrom="\d+"
+      chrom=r"\d+"
+
 
 # Load genetic data information
 genotype = config["genodata"]["name"]
@@ -49,7 +50,7 @@ def get_pheno_to_run():
 # Target rule
 rule all:
   input:
-    "results/all_phenos_summary.cs"
+    pjoin(outdir, "all_phenos_summary.cs")
 
 checkpoint sumstat_2_plink:
   message:
@@ -167,7 +168,7 @@ rule collect_by_pheno:
 
 rule collect_all:
   input:
-    expand("results/{pheno}/summary.cs", pheno=get_pheno_to_run()),
+    expand(pjoin(outdir, "{pheno}/summary.cs"), pheno=get_pheno_to_run()),
   output:
     pjoin(outdir, "all_phenos_summary.cs")
   resources:
