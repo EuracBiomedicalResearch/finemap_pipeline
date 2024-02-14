@@ -10,7 +10,7 @@ configfile: "config/config.yaml"
 
 # Define wildcards for chromosomes 
 wildcard_constraints:
-      chrom="\d+"
+      chrom=r"\d+"
 
 # Load genetic data information
 genotype = config["genodata"]["name"]
