@@ -21,7 +21,10 @@ def main(summary_files, outfile, bypheno=True):
         try:
             # Read input file
             print(f"Computing phenotype: {pheno}")
-            sdf = pd.read_csv(ff, sep="\t")
+            try:
+                sdf = pd.read_csv(ff, sep="\t")
+            except pd.errors.EmptyDataError:
+                sdf = pd.DataFrame()
 
             # Handling an empty data.frame
             if sdf.shape[0] > 0:

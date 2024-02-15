@@ -44,38 +44,29 @@ def get_pheno_to_run():
   phenos = [os.path.basename(f) for f in fnames]
   phenos = [p.replace(".regenie.gz.tbi", "") for p in phenos]
   return phenos
-
   
 # Target rule
 rule all:
   input:
     pjoin(outdir, "all_phenos_summary.cs")
 
-checkpoint sumstat_2_plink:
+# Divide sumstat by chromosome
+rule sumstat_2_plink:
   message:
     "Separate summary stat by chromosome based on best hits"
   input:
     sumstat = pjoin(resdir, "{pheno}.regenie.gz")
   output:
-    directory(pjoin(outdir, "{pheno}/tmp"))
+    temp(pjoin(outdir, "{pheno}/tmp/chr{chrom}_sumstat.csv"))
   resources:
     mem_mb=12000
   params:
     pval_thr = pthr,
     pval_col = pvalcol
+  conda:
+    "plink-pandas"
   script:
     "scripts/separate_gwas.py"
-
-def get_significant(wildcards):
-  """
-  Exctract the chromosome available for each summary stat
-  """
-  ckoutput = checkpoints.sumstat_2_plink.get(**wildcards).output[0]
-  clfiles = expand(pjoin(outdir, "{pheno}/cs/cs_chr{chrom}.cssmstat"),
-                   pheno=wildcards.pheno,
-                   chrom=glob_wildcards(pjoin(ckoutput, "chr{chrom}_sumstat.csv")).chrom
-                   )
-  return clfiles
 
 
 rule cut_pheno:
@@ -84,7 +75,7 @@ rule cut_pheno:
   input:
     phenofile = config["pheno_file"]
   output:
-    pjoin(outdir, "{pheno}/tmp/phenotype.csv")
+    temp(pjoin(outdir, "{pheno}/tmp/phenotype.csv"))
   conda:
     "plink-pandas"
   script:
@@ -111,13 +102,20 @@ rule clumping:
   conda:
     "plink2"
   shell:
-    """plink2 --bfile {params.infile} --clump {input.smstat} \
-    --clump-log10 'input-only' --clump-field {pvalcol} \
-    --clump-log10-p1 {params.clump_logp1} --clump-log10-p2 {params.clump_logp2} \
-    --clump-r2 {params.clump_r2} --clump-kb {params.clump_kb} \
-    --clump-snp-field ID  --out {params.ofile} \
-    --memory {resources.mem_mb} \
-    --keep {params.sampfile}
+    """
+    if [ -s {input} ]
+    then
+      plink2 --bfile {params.infile} --clump {input.smstat} \
+      --clump-log10 'input-only' --clump-field {pvalcol} \
+      --clump-log10-p1 {params.clump_logp1} --clump-log10-p2 {params.clump_logp2} \
+      --clump-r2 {params.clump_r2} --clump-kb {params.clump_kb} \
+      --clump-snp-field ID  --out {params.ofile} \
+      --memory {resources.mem_mb} \
+      --keep {params.sampfile}
+    else
+      touch {output[0]}
+      touch {output[1]}
+    fi
     """
 
 rule enlarge_and_merge:
@@ -155,7 +153,8 @@ rule run_susieR:
 
 rule collect_by_pheno:
   input:
-    get_significant
+    expand(pjoin(outdir, "{{pheno}}/cs/cs_chr{chrom}.cssmstat"), 
+           chrom=range(1,23))
   output:
     pjoin(outdir, "{pheno}/summary.cs")
   resources:
