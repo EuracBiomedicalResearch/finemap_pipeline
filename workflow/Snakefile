@@ -2,15 +2,20 @@ import os
 import json
 import glob
 from os.path import join as pjoin
-
-# Define configuration file
-configfile: "config/config.yaml"
+import pandas as pd
 
 # TODO: Need to validate the inputs....
+# TODO: divide rules into different file to have the main file cleaner 
 
 # Define wildcards for chromosomes 
 wildcard_constraints:
       chrom=r"\d+"
+
+
+#----------------------------------------
+# Read configuration file
+#----------------------------------------
+configfile: "config/config.yaml"
 
 # Load genetic data information
 genotype = config["genodata"]["name"]
@@ -29,6 +34,19 @@ outdir = config["output_dir"]
 if not os.path.exists(outdir):
   os.makedirs(outdir, exist_ok=True)
 
+# Include script to prepare input
+# TODO: generalize prepare_input.py script
+include: "scripts/prepare_input.py"
+
+# Check if the input is available
+try:
+  run_list = pd.read_csv(config["run_list"], header=0, sep="\t")
+except KeyError:
+  run_list = prepare_inputs(pjoin(resdir, "tophits"), pval_thr=pthr)
+
+#----------------------------------------
+# Custom funtion to define input for the rules
+#----------------------------------------
 def get_pfile_from_chrom(wildcards):
   pfiles = gd['plinkfiles']
   nfiles = gd['nfiles']
@@ -39,12 +57,18 @@ def get_pfile_from_chrom(wildcards):
   return ff[0]
 
 # Function to get the phenotypes
+def get_phenos():
+  return run_list['pheno'].unique().tolist()
+
 def get_pheno_to_run():
   fnames = glob.glob(pjoin(resdir, "*.regenie.gz.tbi"))
   phenos = [os.path.basename(f) for f in fnames]
   phenos = [p.replace(".regenie.gz.tbi", "") for p in phenos]
   return phenos
   
+#----------------------------------------
+# Start creating the rules for the workflow
+#----------------------------------------
 # Target rule
 rule all:
   input:
@@ -154,7 +178,9 @@ rule run_susieR:
 rule collect_by_pheno:
   input:
     expand(pjoin(outdir, "{{pheno}}/cs/cs_chr{chrom}.cssmstat"), 
-           chrom=range(1,23))
+           chrom=lookup(query="pheno == '{pheno}'", within=run_list, cols="chrom"))
+    # expand(pjoin(outdir, "{{pheno}}/cs/cs_chr{chrom}.cssmstat"), 
+    #        chrom=range(1,23))
   output:
     pjoin(outdir, "{pheno}/summary.cs")
   resources:
@@ -166,7 +192,8 @@ rule collect_by_pheno:
 
 rule collect_all:
   input:
-    expand(pjoin(outdir, "{pheno}/summary.cs"), pheno=get_pheno_to_run()),
+    expand(pjoin(outdir, "{pheno}/summary.cs"), pheno=get_phenos()),
+    # expand(pjoin(outdir, "{pheno}/summary.cs"), pheno=get_pheno_to_run()),
   output:
     pjoin(outdir, "all_phenos_summary.cs")
   resources:
