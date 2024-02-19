@@ -117,7 +117,7 @@ if (ld_file_size > 0) {
   sid <- sid[nonasamp, ]
   y <- y[nonasamp, ]
 
-  if (nonasamp == 0){
+  if (length(nonasamp) == 0){
     rlog::log_error("No samples left for analysis...")
     rlog::log_error("Please check the overlap between sample ID in
     genotype files and phenotype file.")
