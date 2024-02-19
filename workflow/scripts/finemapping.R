@@ -76,97 +76,106 @@ cs_rds_file <- snakemake@output[["cs_rds"]]
 # sumstat_file <- glue(proj_path, "/tmp-smstat/meta_6/chr4_sumstat.csv")
 # pheno_file <- glue(proj_path, "/tmp-smstat/meta_6/phenotype.csv") 
 
-geno_info <- read.table(ld_file, header=TRUE, sep="\t")
+ld_file_size <- file.size(ld_file)
 
-#---- Read phenotype file ----
-pheno <- read.table(pheno_file, header=TRUE, sep="\t")
-y <- pheno["Y"]
-sid <- pheno["IID"]
-if (CHRIS){
-  sid <- sid %>% 
-    mutate(IID = str_pad(IID, side= "left", width=10, pad=0))
-}
-# Remove NA from sample list
-nonasamp <- which(!is.na(y))
-sid <- sid[nonasamp, ]
-y <- y[nonasamp, ]
+if (ld_file_size > 0) {
+  geno_info <- read.table(ld_file, header = TRUE, sep = "\t")
 
-#---- read summary stat ----
-smstat <- fread(sumstat_file, header=TRUE, sep="\t")
-
-#---- Prepare the result list ----
-cs_smstat_l <- list()
-cs_report_l <- list()
-cs_rssfit_l <- list()
-
-for (i in 1:nrow(geno_info)){
-  #---- Get clump id and chromosome ----
-  clid <- geno_info[i, "CLUMPID"]
-  mychrom <- geno_info[i, "CHROM"]
-  
-  #---- Logging ----
-  cat(glue("Processing clump id {clid} on chrom: {mychrom}"))
-  cat("\n")
-  
-  #---- Read clump genotype file ----
-  geno_file <- geno_info[i, "GENOFILE"]
-  # geno_file <- file.path(proj_path, geno_file)
-  genos <- fread(geno_file)
-  snps <- names(genos)[7:ncol(genos)]
-  snps <- gsub("_.+", "", snps)
-  cat(glue("Analyzing: {length(snps)} snps!"), "\n")
-  
-  #---- Subset summary stat ----
-  smstattmp <- smstat[ID %in% snps,]
-  ix <- match(snps, smstattmp$ID)
-  smstattmp <- smstattmp[ix, ]
-  
-  #---- Match phenotype with genotypes ----
-  gsix <- match(genos$IID, sid)
-  genos_nona <- genos[which(!is.na(gsix))]
-  ytmp <- y[gsix[!is.na(gsix)]]
-  sidtmp <- sid[gsix[!is.na(gsix)]]
-  X <- as.matrix(genos_nona[,7:ncol(genos_nona)]) * 1.0
-  rss_ress <- susie(X, y=ytmp, max_iter=1000, min_abs_corr=0.1)
-  
-  cs <- rss_ress$sets
-  if (length(cs$cs) > 0){
-    cat("Found some credible sets!", "\n")
-    vars <- summary(rss_ress)
-    allsnps <- vars$vars
-    allsnps <- allsnps %>% mutate(ID=snps[variable])
-    
-    smstatcs <- smstattmp %>% left_join(allsnps, by="ID") %>% 
-      filter(cs > 0) %>% 
-      mutate(csid=paste(CHROM, cs, sep="_"))
-    csrep <- vars$cs %>% 
-      mutate(CLUMPID=clid,
-             CHROM=mychrom,
-             csid=paste(CHROM, cs, sep="_"))
-    
-    cs_smstat_l[[i]] <- data.table(smstatcs)
-    cs_report_l[[i]] <- data.table(csrep)
-    cs_rssfit_l[[i]] <- rss_ress
+  #---- Read phenotype file ----
+  pheno <- read.table(pheno_file, header = TRUE, sep = "\t")
+  y <- pheno["Y"]
+  sid <- pheno["IID"]
+  if (CHRIS) {
+    sid <- sid %>% 
+      mutate(IID = str_pad(IID, side = "left", width = 10, pad = 0))
   }
+
+  # Remove NA from sample list
+  nonasamp <- which(!is.na(y))
+  sid <- sid[nonasamp, ]
+  y <- y[nonasamp, ]
+
+  #---- read summary stat ----
+  smstat <- fread(sumstat_file, header = TRUE, sep = "\t")
+
+  #---- Prepare the result list ----
+  cs_smstat_l <- list()
+  cs_report_l <- list()
+  cs_rssfit_l <- list()
+
+  for (i in 1:nrow(geno_info)){
+    #---- Get clump id and chromosome ----
+    clid <- geno_info[i, "CLUMPID"]
+    mychrom <- geno_info[i, "CHROM"]
+
+    #---- Logging ----
+    cat(glue("Processing clump id {clid} on chrom: {mychrom}"))
+    cat("\n")
+
+    #---- Read clump genotype file ----
+    geno_file <- geno_info[i, "GENOFILE"]
+    # geno_file <- file.path(proj_path, geno_file)
+    genos <- fread(geno_file)
+    snps <- names(genos)[7:ncol(genos)]
+    snps <- gsub("_.+", "", snps)
+    cat(glue("Analyzing: {length(snps)} snps!"), "\n")
+
+    #---- Subset summary stat ----
+    smstattmp <- smstat[ID %in% snps, ]
+    ix <- match(snps, smstattmp$ID)
+    smstattmp <- smstattmp[ix, ]
+
+    #---- Match phenotype with genotypes ----
+    gsix <- match(genos$IID, sid)
+    genos_nona <- genos[which(!is.na(gsix))]
+    ytmp <- y[gsix[!is.na(gsix)]]
+    sidtmp <- sid[gsix[!is.na(gsix)]]
+    X <- as.matrix(genos_nona[,7:ncol(genos_nona)]) * 1.0
+    rss_ress <- susie(X, y = ytmp, max_iter = 1000, min_abs_corr = 0.1)
+
+    cs <- rss_ress$sets
+    if (length(cs$cs) > 0) {
+      cat("Found some credible sets!", "\n")
+      vars <- summary(rss_ress)
+      allsnps <- vars$vars
+      allsnps <- allsnps %>% mutate(ID = snps[variable])
+
+      smstatcs <- smstattmp %>%
+        left_join(allsnps, by = "ID") %>%
+        filter(cs > 0) %>%
+        mutate(csid = paste(CHROM, cs, sep = "_"))
+      csrep <- vars$cs %>%
+        mutate(CLUMPID = clid,
+               CHROM = mychrom,
+               csid = paste(CHROM, cs, sep = "_"))
+
+      cs_smstat_l[[i]] <- data.table(smstatcs)
+      cs_report_l[[i]] <- data.table(csrep)
+      cs_rssfit_l[[i]] <- rss_ress
+    }
+  }
+
+  cs_smstat <- data.table::rbindlist(cs_smstat_l)
+  cs_report <- data.table::rbindlist(cs_report_l)
+
+  #---- Saving output ----
+  cat("Saving output...\n")
+  write.table(cs_report, file = cs_report_file, sep = "\t",
+              col.names = TRUE, row.names = FALSE, quote = FALSE)
+  write.table(cs_smstat, file = cs_smstat_file, sep = "\t",
+              col.names = TRUE, row.names = FALSE, quote = FALSE)
+  print(cs_rds_file)
+  saveRDS(cs_rssfit_l, file = cs_rds_file)
+} else {
+  cat("Touch output files...", "\n")
+  cat(file = cs_report_file)
+  cat(file = cs_smstat_file)
+  cat(file = cs_rds_file)
+
 }
-
-cs_smstat <- data.table::rbindlist(cs_smstat_l)
-cs_report <- data.table::rbindlist(cs_report_l)
-
-#---- Saving output ----
-cat("Saving output...\n")
-write.table(cs_report, file=cs_report_file, sep="\t", 
-            col.names=TRUE, row.names=FALSE, quote=FALSE)
-write.table(cs_smstat, file=cs_smstat_file, sep="\t", 
-            col.names=TRUE, row.names=FALSE, quote=FALSE)
-print("Holaaa")
-print(cs_rds_file)
-print("Ciaooo")
-saveRDS(cs_rssfit_l, file=cs_rds_file)
-
-cat("\n", 
-    "----------", "\n", 
-    "Done!!!", "\n", 
+cat("\n",
+    "----------", "\n",
+    "Done!!!", "\n",
     "----------", "\n")
 
 # susie_plot(rss_res,y = "PIP")

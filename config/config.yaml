@@ -11,13 +11,14 @@ genodata:
 # ------------------
 # See https://www.cog-genomics.org/plink/1.9/filter#indiv
 # for details on the sample file
-sample_file: "<path_to_sample_file>/sample.samplist"
+sample_file: "/scratch/mfilosi/test_gwas_regenie/metaboGWAS/sample.samplist"
 
 # Phenotype file used in the GWAS
 # -------------------------------
 # tab separated.
 # First two colums should be FID and IID
 pheno_file: "/scratch/mfilosi/metaboGWAS/input_files/phenotype_filt_winsorized_scaled.txt"
+run_list: "/scratch/mfilosi/test_gwas_regenie/finemap_pipeline/pheno_to_run.csv" 
 
 # Clumping
 # --------
