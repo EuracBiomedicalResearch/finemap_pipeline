@@ -13,6 +13,7 @@ dependencies:
   - r-rcpp==1.0.*
   - r-rcppeigen==0.3.3.*
   - r-markdown==1.10
+  - r-rlog==0.1.0
   - numpy==1.24.3
   - scipy==1.9.3
   - pandas==1.5.3

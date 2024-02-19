@@ -170,8 +170,8 @@ rule run_susieR:
   output:
     cs_smstat = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}.cssmstat"),
     cs_report = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}.csreport"),
-    cs_rds = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}_fit.rds"),
-    cs_log = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}.log")
+    cs_rds = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}_fit.rds")#,
+    # cs_log = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}.log")
   params:
     use_ld = config["susieR"]["use_ld"],
     chris_id = config["susieR"]["chris_id"],
