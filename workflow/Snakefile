@@ -10,7 +10,7 @@ configfile: "config/config.yaml"
 
 # Define wildcards for chromosomes 
 wildcard_constraints:
-      chrom="\d+"
+      chrom=r"\d+"
 
 # Load genetic data information
 genotype = config["genodata"]["name"]
@@ -31,7 +31,11 @@ if not os.path.exists(outdir):
 
 def get_pfile_from_chrom(wildcards):
   pfiles = gd['plinkfiles']
-  ff = [p for p in pfiles if p.find(f'chr{wildcards.chrom}.') > 0]
+  nfiles = gd['nfiles']
+  if nfiles == 1:
+    ff = pfiles
+  else:
+    ff = [p for p in pfiles if p.find(f'chr{wildcards.chrom}.') > 0]
   return ff[0]
 
 # Function to get the phenotypes
