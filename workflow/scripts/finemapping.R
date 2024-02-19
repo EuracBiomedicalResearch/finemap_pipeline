@@ -164,9 +164,7 @@ if (ld_file_size > 0) {
               col.names = TRUE, row.names = FALSE, quote = FALSE)
   write.table(cs_smstat, file = cs_smstat_file, sep = "\t",
               col.names = TRUE, row.names = FALSE, quote = FALSE)
-  print("Holaaa")
   print(cs_rds_file)
-  print("Ciaooo")
   saveRDS(cs_rssfit_l, file = cs_rds_file)
 } else {
   cat("Touch output files...", "\n")
