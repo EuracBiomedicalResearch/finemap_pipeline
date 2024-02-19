@@ -16,7 +16,10 @@ def prepare_inputs(tophits_dir, pval_thr=5e-8, outfile=None):
         pheno = pheno.replace(".regenie.filtered.gz", "")
 
         print(f"Running pheno: {pheno}, {i} / {len(flist)}", end="\r")
-        tpdf = pd.read_csv(f, header=0, sep="\t", usecols=["CHROM", "LOG10P"])
+        try:
+            tpdf = pd.read_csv(f, header=0, sep="\t", usecols=["CHROM", "LOG10P"])
+        except pd.errors.EmptyDataError:
+            tpdf = pd.DataFrame()
 
         if tpdf.shape[0] > 0:
             tpdf["P"] = 10 ** -tpdf["LOG10P"]

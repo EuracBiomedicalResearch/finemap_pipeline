@@ -43,6 +43,9 @@ try:
   run_list = pd.read_csv(config["run_list"], header=0, sep="\t")
 except KeyError:
   run_list = prepare_inputs(pjoin(resdir, "tophits"), pval_thr=pthr)
+except FileNotFoundError:
+  run_list = prepare_inputs(pjoin(resdir, "tophits"), pval_thr=pthr)
+
 
 #----------------------------------------
 # Custom funtion to define input for the rules
