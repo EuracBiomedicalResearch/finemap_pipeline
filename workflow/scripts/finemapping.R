@@ -88,8 +88,7 @@ if (ld_file_size > 0) {
   geno_info <- read.table(ld_file, header = TRUE, sep = "\t")
 
   #---- Read phenotype file ----
-  pheno <- data.table::fread(pheno_file, header = TRUE, sep = "\t",
-                             keepLeadingZeros = TRUE)
+  pheno <- read.table(pheno_file, header = TRUE, sep = "\t")
   y <- pheno["Y"]
   sid <- pheno["IID"]
   if (CHRIS) {
