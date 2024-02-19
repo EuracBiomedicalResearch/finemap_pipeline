@@ -170,9 +170,15 @@ rule run_susieR:
   output:
     cs_smstat = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}.cssmstat"),
     cs_report = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}.csreport"),
-    cs_rds = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}_fit.rds")
+    cs_rds = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}_fit.rds"),
+    cs_log = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}.log")
+  params:
+    use_ld = config["susieR"]["use_ld"],
+    chris_id = config["susieR"]["chris_id"],
+    iter = config["susieR"]["iter"],
+    min_abs_corr = config["susieR"]["min_abs_corr"]
   resources:
-    mem_mb=16000
+    mem_mb = 16000
   conda:
     "susier"
   script:
@@ -182,8 +188,6 @@ rule collect_by_pheno:
   input:
     expand(pjoin(outdir, "{{pheno}}/cs/cs_chr{chrom}.cssmstat"), 
            chrom=lookup(query="pheno == '{pheno}'", within=run_list, cols="chrom"))
-    # expand(pjoin(outdir, "{{pheno}}/cs/cs_chr{chrom}.cssmstat"), 
-    #        chrom=range(1,23))
   output:
     pjoin(outdir, "{pheno}/summary.cs")
   resources:
@@ -196,7 +200,6 @@ rule collect_by_pheno:
 rule collect_all:
   input:
     expand(pjoin(outdir, "{pheno}/summary.cs"), pheno=get_phenos()),
-    # expand(pjoin(outdir, "{pheno}/summary.cs"), pheno=get_pheno_to_run()),
   output:
     pjoin(outdir, "all_phenos_summary.cs")
   resources:

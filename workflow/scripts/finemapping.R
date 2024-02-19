@@ -55,15 +55,21 @@ create_ldmat <- function(x, snplist){
 }
 
 #---- Setup ----
-CHRIS <- TRUE
 # cwd <- snakemake@params["cwd"]
 ld_file <- snakemake@input[["ldfile"]]
 sumstat_file <- snakemake@input[["smstat"]]
 pheno_file <- snakemake@input[["phenofile"]]
-# finemapfile <- snakemake@output[["finemapfile"]]
+
+# Load parameters for data handling
+compute_ld <- snakemake@params[["use_ld"]]
+CHRIS <- snakemake@params[["chris_id"]]
+
+# Load parameters for susieR model
+susie_min_abs_cor <- snakemake@params[["min_abs_corr"]]
+susie_iter <- snakemake@params[["iter"]]
+
 cs_smstat_file <- snakemake@output[["cs_smstat"]]
 cs_report_file <- snakemake@output[["cs_report"]]
-# cs_plots_file <- snakemake@output["cs_plot"]
 cs_rds_file <- snakemake@output[["cs_rds"]]
 
 # RUN ONLY LOCALLY
@@ -82,7 +88,8 @@ if (ld_file_size > 0) {
   geno_info <- read.table(ld_file, header = TRUE, sep = "\t")
 
   #---- Read phenotype file ----
-  pheno <- read.table(pheno_file, header = TRUE, sep = "\t")
+  pheno <- data.table::fread(pheno_file, header = TRUE, sep = "\t",
+                             keepLeadingZeros = TRUE)
   y <- pheno["Y"]
   sid <- pheno["IID"]
   if (CHRIS) {
@@ -131,7 +138,37 @@ if (ld_file_size > 0) {
     ytmp <- y[gsix[!is.na(gsix)]]
     sidtmp <- sid[gsix[!is.na(gsix)]]
     X <- as.matrix(genos_nona[,7:ncol(genos_nona)]) * 1.0
-    rss_ress <- susie(X, y = ytmp, max_iter = 1000, min_abs_corr = 0.1)
+
+    cat("Compute susieR model...\n")
+    if (compute_ld){
+      betas <- smstattmp$BETA
+      sebetas <- smstattmp$SE
+      n <- min(smstattmp$N, na.rm=TRUE)
+
+      cat("Compute correlation matrix...\n")
+      R <- cor(X)
+      rss_ress <- tryCatch(
+        susie_rss(bhat = betas, shat = sebetas, n = n, R = R, max_iter = susie_iter, min_abs_corr = susie_min_abs_cor)
+      , error = function(e){
+          # Return an empty list and set class to "susie"
+          aa <- list()
+          aa$sets <- list()
+          class(aa) <- "susie"
+          return(aa)
+        }
+        )
+    } else {
+      rss_ress <- tryCatch(
+        susie(X, y = ytmp, max_iter = susie_iter,
+              min_abs_corr = susie_min_abs_cor),
+        error = function(e){
+          aa <- list()
+          aa$sets <- list()
+          class(aa) <- "susie"
+          return(aa)
+        }
+      )
+    }
 
     cs <- rss_ress$sets
     if (length(cs$cs) > 0) {
@@ -164,7 +201,6 @@ if (ld_file_size > 0) {
               col.names = TRUE, row.names = FALSE, quote = FALSE)
   write.table(cs_smstat, file = cs_smstat_file, sep = "\t",
               col.names = TRUE, row.names = FALSE, quote = FALSE)
-  print(cs_rds_file)
   saveRDS(cs_rssfit_l, file = cs_rds_file)
 } else {
   cat("Touch output files...", "\n")

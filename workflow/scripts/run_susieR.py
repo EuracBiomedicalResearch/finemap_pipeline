@@ -272,8 +272,6 @@ def compute_ld(snps, clid, plinkfile, dryrun=False, prefix="ld_clump",
     ldcommand = ['plink', '--bfile', plinkfile, '--keep-allele-order',
                  '--extract', snpfile,
                  '--recode', 'A', '--out', ofile, '--memory', str(mem)]
-    # TODO: Check the number of snps and decide whether to force the writing or
-    # not!
     print(" ".join(ldcommand))
 
     if dryrun:
