@@ -2,15 +2,20 @@ import os
 import json
 import glob
 from os.path import join as pjoin
-
-# Define configuration file
-configfile: "config/config.yaml"
+import pandas as pd
 
 # TODO: Need to validate the inputs....
+# TODO: divide rules into different file to have the main file cleaner 
 
 # Define wildcards for chromosomes 
 wildcard_constraints:
-      chrom="\d+"
+      chrom=r"\d+"
+
+
+#----------------------------------------
+# Read configuration file
+#----------------------------------------
+configfile: "config/config.yaml"
 
 # Load genetic data information
 genotype = config["genodata"]["name"]
@@ -29,49 +34,66 @@ outdir = config["output_dir"]
 if not os.path.exists(outdir):
   os.makedirs(outdir, exist_ok=True)
 
+# Include script to prepare input
+# TODO: generalize prepare_input.py script
+include: "scripts/prepare_input.py"
+
+# Check if the input is available
+try:
+  run_list = pd.read_csv(config["run_list"], header=0, sep="\t")
+except KeyError:
+  run_list = prepare_inputs(pjoin(resdir, "tophits"), pval_thr=pthr)
+except FileNotFoundError:
+  run_list = prepare_inputs(pjoin(resdir, "tophits"), pval_thr=pthr)
+
+
+#----------------------------------------
+# Custom funtion to define input for the rules
+#----------------------------------------
 def get_pfile_from_chrom(wildcards):
   pfiles = gd['plinkfiles']
-  ff = [p for p in pfiles if p.find(f'chr{wildcards.chrom}.') > 0]
+  nfiles = gd['nfiles']
+  if nfiles == 1:
+    ff = pfiles
+  else:
+    ff = [p for p in pfiles if p.find(f'chr{wildcards.chrom}.') > 0]
   return ff[0]
 
 # Function to get the phenotypes
+def get_phenos():
+  return run_list['pheno'].unique().tolist()
+
 def get_pheno_to_run():
   fnames = glob.glob(pjoin(resdir, "*.regenie.gz.tbi"))
   phenos = [os.path.basename(f) for f in fnames]
   phenos = [p.replace(".regenie.gz.tbi", "") for p in phenos]
   return phenos
-
   
+#----------------------------------------
+# Start creating the rules for the workflow
+#----------------------------------------
 # Target rule
 rule all:
   input:
     pjoin(outdir, "all_phenos_summary.cs")
 
-checkpoint sumstat_2_plink:
+# Divide sumstat by chromosome
+rule sumstat_2_plink:
   message:
     "Separate summary stat by chromosome based on best hits"
   input:
     sumstat = pjoin(resdir, "{pheno}.regenie.gz")
   output:
-    directory(pjoin(outdir, "{pheno}/tmp"))
+    temp(pjoin(outdir, "{pheno}/tmp/chr{chrom}_sumstat.csv"))
   resources:
     mem_mb=12000
   params:
     pval_thr = pthr,
     pval_col = pvalcol
+  conda:
+    "plink-pandas"
   script:
     "scripts/separate_gwas.py"
-
-def get_significant(wildcards):
-  """
-  Exctract the chromosome available for each summary stat
-  """
-  ckoutput = checkpoints.sumstat_2_plink.get(**wildcards).output[0]
-  clfiles = expand(pjoin(outdir, "{pheno}/cs/cs_chr{chrom}.cssmstat"),
-                   pheno=wildcards.pheno,
-                   chrom=glob_wildcards(pjoin(ckoutput, "chr{chrom}_sumstat.csv")).chrom
-                   )
-  return clfiles
 
 
 rule cut_pheno:
@@ -80,7 +102,7 @@ rule cut_pheno:
   input:
     phenofile = config["pheno_file"]
   output:
-    pjoin(outdir, "{pheno}/tmp/phenotype.csv")
+    temp(pjoin(outdir, "{pheno}/tmp/phenotype.csv"))
   conda:
     "plink-pandas"
   script:
@@ -107,13 +129,20 @@ rule clumping:
   conda:
     "plink2"
   shell:
-    """plink2 --bfile {params.infile} --clump {input.smstat} \
-    --clump-log10 'input-only' --clump-field {pvalcol} \
-    --clump-log10-p1 {params.clump_logp1} --clump-log10-p2 {params.clump_logp2} \
-    --clump-r2 {params.clump_r2} --clump-kb {params.clump_kb} \
-    --clump-snp-field ID  --out {params.ofile} \
-    --memory {resources.mem_mb} \
-    --keep {params.sampfile}
+    """
+    if [ -s {input} ]
+    then
+      plink2 --bfile {params.infile} --clump {input.smstat} \
+      --clump-log10 'input-only' --clump-field {pvalcol} \
+      --clump-log10-p1 {params.clump_logp1} --clump-log10-p2 {params.clump_logp2} \
+      --clump-r2 {params.clump_r2} --clump-kb {params.clump_kb} \
+      --clump-snp-field ID  --out {params.ofile} \
+      --memory {resources.mem_mb} \
+      --keep {params.sampfile}
+    else
+      touch {output[0]}
+      touch {output[1]}
+    fi
     """
 
 rule enlarge_and_merge:
@@ -141,9 +170,15 @@ rule run_susieR:
   output:
     cs_smstat = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}.cssmstat"),
     cs_report = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}.csreport"),
-    cs_rds = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}_fit.rds")
+    cs_rds = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}_fit.rds")#,
+    # cs_log = pjoin(outdir, "{pheno}/cs/cs_chr{chrom}.log")
+  params:
+    use_ld = config["susieR"]["use_ld"],
+    chris_id = config["susieR"]["chris_id"],
+    iter = config["susieR"]["iter"],
+    min_abs_corr = config["susieR"]["min_abs_corr"]
   resources:
-    mem_mb=16000
+    mem_mb = 16000
   conda:
     "susier"
   script:
@@ -151,7 +186,8 @@ rule run_susieR:
 
 rule collect_by_pheno:
   input:
-    get_significant
+    expand(pjoin(outdir, "{{pheno}}/cs/cs_chr{chrom}.cssmstat"), 
+           chrom=lookup(query="pheno == '{pheno}'", within=run_list, cols="chrom"))
   output:
     pjoin(outdir, "{pheno}/summary.cs")
   resources:
@@ -163,7 +199,7 @@ rule collect_by_pheno:
 
 rule collect_all:
   input:
-    expand(pjoin(outdir, "{pheno}/summary.cs"), pheno=get_pheno_to_run()),
+    expand(pjoin(outdir, "{pheno}/summary.cs"), pheno=get_phenos()),
   output:
     pjoin(outdir, "all_phenos_summary.cs")
   resources:

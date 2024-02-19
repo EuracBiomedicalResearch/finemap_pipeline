@@ -86,6 +86,12 @@ sbatch snakemake --configfile config/config.yaml --profile ~/snake_prof/slurm
   --nolock
 ```
 
+# Output
+
+The pipeline produce a summary `tsv` file with the leading variant for each credible set found in the analysis.
+The summary contain a subset of the original summary statistic.
+
+
 # References
  
 > {#ref-susier} Wang, G., Sarkar, A., Carbonetto, P. & Stephens, M. (2020). A simple new approach to variable selection in regression, with application to genetic fine mapping. Journal of the Royal Statistical Society, Series B 82, 1273–1300. [https://doi.org/10.1111/rssb.12388](https://doi.org/10.1111/rssb.12388)
