@@ -17,6 +17,7 @@ wildcard_constraints:
 #----------------------------------------
 configfile: "config/config.yaml"
 
+
 # Load genetic data information
 genotype = config["genodata"]["name"]
 with open(config["genodata"]["json"], "r") as f:
@@ -212,7 +213,7 @@ rule annotate_by_pheno:
 
 rule collect_all:
   input:
-    branch(config["sumstat"]["annotat"],
+    branch(config["sumstat"]["annotate"] == True,
       then=expand(pjoin(outdir, "{pheno}/summary_annot.cs"), pheno=get_phenos()),
       otherwise=expand(pjoin(outdir, "{pheno}/summary.cs"), pheno=get_phenos())
     )

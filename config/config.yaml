@@ -46,7 +46,7 @@ sumstat:
   log: True
   pthr: 1.7e-11
   tophits_dir: "/scratch/mfilosi/test_gwas_regenie/metaboGWAS/tophits"
-  annotate: false
+  annotate: False
 
 # SusieR parameters
 # -----------------
