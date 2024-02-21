@@ -92,7 +92,7 @@ rule sumstat_2_plink:
     pval_thr = pthr,
     pval_col = pvalcol
   conda:
-    "plink-pandas"
+    "envs/plink-pandas.yml"
   script:
     "scripts/separate_gwas.py"
 
@@ -105,7 +105,7 @@ rule cut_pheno:
   output:
     temp(pjoin(outdir, "{pheno}/tmp/phenotype.csv"))
   conda:
-    "plink-pandas"
+    "envs/plink-pandas.yml"
   script:
     "scripts/separate_pheno.py"
 
@@ -128,7 +128,7 @@ rule clumping:
   resources:
     mem_mb = 16000
   conda:
-    "plink2"
+    "envs/plink2.yml"
   shell:
     """
     if [ -s {input} ]
@@ -157,7 +157,7 @@ rule enlarge_and_merge:
     plinkfile = get_pfile_from_chrom,
     totsize = config["clumping"]["totsize"]
   conda:
-    "plink-pandas"
+    "envs/plink-pandas.yml"
   resources:
     mem_mb=16000
   script:
@@ -181,7 +181,7 @@ rule run_susieR:
   resources:
     mem_mb = 16000
   conda:
-    "susier"
+    "envs/susier.yml"
   script:
     "scripts/finemapping.R"
 
@@ -224,7 +224,7 @@ rule collect_all:
   params:
     bypheno = True
   conda:
-    "plink-pandas"
+    "envs/plink-pandas.yml"
   script:
     "scripts/aggregate_by_pheno.py" 
 
