@@ -197,9 +197,25 @@ rule collect_by_pheno:
   script:
     "scripts/aggregate_by_pheno.py"
 
+rule annotate_by_pheno:
+  input:
+    rules.collect_by_pheno.output
+  output:
+    pjoin(outdir, "{pheno}/summary_annot.cs")
+  params:
+    tophitsdir = config["sumstat"]["tophits_dir"]
+  resources:
+    mem_mb = 8000
+  script:
+    "scripts/annotate_cs.py"
+
+
 rule collect_all:
   input:
-    expand(pjoin(outdir, "{pheno}/summary.cs"), pheno=get_phenos()),
+    branch(config["sumstat"]["annotat"],
+      then=expand(pjoin(outdir, "{pheno}/summary_annot.cs"), pheno=get_phenos()),
+      otherwise=expand(pjoin(outdir, "{pheno}/summary.cs"), pheno=get_phenos())
+    )
   output:
     pjoin(outdir, "all_phenos_summary.cs")
   resources:
