@@ -45,6 +45,8 @@ sumstat:
   pvalcol: "LOG10P"
   log: True
   pthr: 1.7e-11
+  tophits_dir: "/scratch/mfilosi/test_gwas_regenie/metaboGWAS/tophits"
+  annotate: False
 
 # SusieR parameters
 # -----------------
