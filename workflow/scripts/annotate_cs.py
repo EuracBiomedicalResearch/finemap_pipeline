@@ -28,5 +28,5 @@ if __name__ == "__main__":
     if cs_annot.shape[0] > 0:
         cs_annot.to_csv(snakemake.output[0], index_label="ID", sep="\t")
     else:
-        f = open(snakemake.output, "w")
+        f = open(snakemake.output[0], "w")
         f.close()
