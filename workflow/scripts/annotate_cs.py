@@ -11,7 +11,7 @@ def main(pheno, tophits_dir, cs_file):
 
     tpfile = os.path.join(tophits_dir, f"{pheno}.regenie.filtered.gz")
     tpdf = pd.read_csv(tpfile, header=0, delimiter="\t",
-                       usecols=["ID", "GENE_NAME"])
+                       usecols=["ID", "GENE_NAME", "RSID"])
     cs.set_index("ID", inplace=True)
     tpdf.set_index("ID", inplace=True)
 
