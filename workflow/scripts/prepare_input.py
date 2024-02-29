@@ -10,6 +10,12 @@ def prepare_inputs(tophits_dir, pval_thr=5e-8, outfile=None):
     except FileNotFoundError as e:
         print(f"Cannot find tophits directory: {tophits_dir}", e)
 
+    try:
+        pval_thr = float(pval_thr)
+    except ValueError:
+        print("Invalid value for `pval_thr`, set to default: 5e-8")
+        pval_thr = 5e-8
+
     reslist = []
     for i, f in enumerate(flist):
         pheno = os.path.basename(f)
@@ -64,4 +70,4 @@ if __name__ == "__main__":
 
     # pval_thr = 6.867189e-12
 
-    prepare_inputs(args.tophits_dir, pval_thr=args.pval_thr, outfile=args.outfile)
+    prepare_inputs(args.topdir, pval_thr=args.pval_thr, outfile=args.outfile)
