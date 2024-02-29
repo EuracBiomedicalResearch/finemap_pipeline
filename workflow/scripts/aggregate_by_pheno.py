@@ -1,9 +1,26 @@
 import pandas as pd
-import os
 from pathlib import Path
 
 
-def main(summary_files, outfile, bypheno=True):
+def create_bed(df):
+    """Create bed regions for each credible set
+    Parameters
+    ----------
+    df: pandas.DataFrame
+        contains the variants for each credible set. See the output of the
+        'scrips/finemapping.R'
+
+    Returns
+    -------
+    a bed formatted file with a line for each credible set
+    """
+    bed1 = df.groupby(['CHROM', 'csid'])['GENPOS'].agg(START="min", END="max")
+    bed1.reset_index(inplace=True)
+    bed1 = bed1.loc[:, ["CHROM", "START", "END", "csid"]]
+    return bed1
+
+
+def main(summary_files, outfile, bypheno=True, bed=True):
     # Open output file
     fo = open(outfile, "w")
 
@@ -33,7 +50,10 @@ def main(summary_files, outfile, bypheno=True):
                     tmpdf["pheno"] = pheno
                     tmpdf["sumfile"] = ff
                 else:
-                    tmpdf = sdf
+                    if bed:
+                        tmpdf = create_bed(sdf)
+                    else:
+                        tmpdf = sdf
 
                 # Write results to output file
                 tmpdf.to_csv(fo, sep="\t", index=False, header=firstw,
@@ -88,4 +108,5 @@ def summarize_df(df, cols=[]):
 
 if __name__ == "__main__":
 
-    main(snakemake.input, snakemake.output[0], snakemake.params.bypheno)
+    main(snakemake.input, snakemake.output[0], snakemake.params.bypheno,
+         snakemake.params.bed)

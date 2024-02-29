@@ -78,6 +78,12 @@ rule all:
   input:
     pjoin(outdir, "all_phenos_summary.cs")
 
+# Rule to export bed files for each credible set
+rule beds:
+  input:
+    expand(pjoin(outdir, "{pheno}/all_cs.bed"), pheno=get_phenos()),
+
+
 # Divide sumstat by chromosome
 rule sumstat_2_plink:
   message:
@@ -194,10 +200,23 @@ rule collect_by_pheno:
   resources:
     mem_mb=12000
   params:
-    bypheno = False
+    bypheno = False,
+    bed = False
   script:
     "scripts/aggregate_by_pheno.py"
 
+rule create_bed:
+  input:
+    expand(pjoin(outdir, "{{pheno}}/cs/cs_chr{chrom}.cssmstat"), 
+           chrom=lookup(query="pheno == '{pheno}'", within=run_list, cols="chrom"))
+  output:
+    pjoin(outdir, "{pheno}/all_cs.bed")
+  params:
+    bypheno = False,
+    bed = True
+  script:
+    "scripts/aggregate_by_pheno.py"
+    
 rule annotate_by_pheno:
   input:
     rules.collect_by_pheno.output
@@ -222,7 +241,8 @@ rule collect_all:
   resources:
     mem_mb=12000
   params:
-    bypheno = True
+    bypheno = True,
+    bed = False
   conda:
     "envs/plink-pandas.yml"
   script:
