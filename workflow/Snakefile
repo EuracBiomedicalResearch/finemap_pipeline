@@ -241,7 +241,8 @@ rule collect_all:
   resources:
     mem_mb=12000
   params:
-    bypheno = True
+    bypheno = True,
+    bed = False
   conda:
     "envs/plink-pandas.yml"
   script:

@@ -86,6 +86,16 @@ sbatch snakemake --configfile config/config.yaml --profile ~/snake_prof/slurm
   --nolock
 ```
 
+#### Export `bed` formats
+
+**New**: added a rule to export credible set regions in bed format.
+After the pipeline has been succefully run, just target the `beds` rule
+when launching the `snakemake` command.
+
+```
+snakemake beds --config/config.yaml --profile <folder>/<to>/<myprofile>
+```
+
 # Output
 
 The pipeline produce a summary `tsv` file with the leading variant for each credible set found in the analysis.
