@@ -11,13 +11,14 @@ genodata:
 # ------------------
 # See https://www.cog-genomics.org/plink/1.9/filter#indiv
 # for details on the sample file
-sample_file: "<path_to_sample_file>/sample.samplist"
+sample_file: "/scratch/mfilosi/test_gwas_regenie/metaboGWAS/sample.samplist"
 
 # Phenotype file used in the GWAS
 # -------------------------------
 # tab separated.
 # First two colums should be FID and IID
 pheno_file: "/scratch/mfilosi/metaboGWAS/input_files/phenotype_filt_winsorized_scaled.txt"
+run_list: "/scratch/mfilosi/test_gwas_regenie/finemap_pipeline/pheno_to_run.csv" 
 
 # Clumping
 # --------
@@ -44,3 +45,22 @@ sumstat:
   pvalcol: "LOG10P"
   log: True
   pthr: 1.7e-11
+  tophits_dir: "/scratch/mfilosi/test_gwas_regenie/metaboGWAS/tophits"
+  annotate: False
+
+# SusieR parameters
+# -----------------
+susieR:
+  # The following parameter will enable the use of correlation matrix based
+  # on LD as specified in [https://stephenslab.github.io/susieR/articles/finemapping_summary_statistics.html](https://stephenslab.github.io/susieR/articles/finemapping_summary_statistics.html)
+  # If set to False (default), it will use the genotypes coded with additive model
+  # together with the phenotype to evaluate the RSS model.
+  use_ld: False
+  # When using this pipeline on CHRIS samples, the IDs
+  # have leading zeros, and will have a total length of 10 characters.
+  # Thus within the `scripts/finemapping.R` will do a conversion
+  # with for zero padding of the IDs to match the ones in the genotypes.
+  # Set this value to `False` for remove 0 padding to 10 character.
+  chris_id: True
+  min_abs_corr: 0.1
+  iter: 1000

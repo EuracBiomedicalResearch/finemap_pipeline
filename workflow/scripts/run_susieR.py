@@ -199,6 +199,9 @@ def read_clump_file(file, enlarge=False, merge=False, **kwargs):
         provided by the plink software
     """
     mylist = []
+
+    # Handling empty files and do nothing...
+
     with open(file, mode='r') as fc:
         fcr = csv.reader(fc, delimiter='\t', skipinitialspace=True)
         next(fcr)
@@ -269,8 +272,6 @@ def compute_ld(snps, clid, plinkfile, dryrun=False, prefix="ld_clump",
     ldcommand = ['plink', '--bfile', plinkfile, '--keep-allele-order',
                  '--extract', snpfile,
                  '--recode', 'A', '--out', ofile, '--memory', str(mem)]
-    # TODO: Check the number of snps and decide whether to force the writing or
-    # not!
     print(" ".join(ldcommand))
 
     if dryrun:
@@ -409,32 +410,40 @@ def main(clumpfile, plinkfile, chr, outfile="",  **kwargs):
         print("Invalid totsize value. Set it to default: 1e6", e)
         totsize = 1e6
 
-    clumplist = read_clump_file(clumpfile, enlarge=True, merge=True,
-                                totsize=1e6)
+    try:
+        # Get clumping file size
+        fs = os.path.getsize(clumpfile)
+    except OSError:
+        # If the file does not exists, then set size to 0
+        fs = 0
 
     # Prepare the file for output
     fout = open(outfile, "w")
-    fw = csv.writer(fout, delimiter="\t")
+    # If file size is not 0...
+    if fs > 0:
+        clumplist = read_clump_file(clumpfile, enlarge=True, merge=True,
+                                    totsize=1e6)
+        fw = csv.writer(fout, delimiter="\t")
 
-    # Output header
-    myheader = ["CHROM", "CLUMPID", "GENOFILE", "SNPLIST"]
-    firstw = True
-    for i, cl in enumerate(clumplist):
-        snps = cl.to_list()
-        genofile, snpfile = compute_ld(snps, clid=i,
-                                       plinkfile=plinkfile,
-                                       prefix=outfile, **kwargs)
+        # Output header
+        myheader = ["CHROM", "CLUMPID", "GENOFILE", "SNPLIST"]
+        firstw = True
+        for i, cl in enumerate(clumplist):
+            snps = cl.to_list()
+            genofile, snpfile = compute_ld(snps, clid=i,
+                                        plinkfile=plinkfile,
+                                        prefix=outfile, **kwargs)
 
-        # Check if the written file exists and is not empty
-        try:
-            if os.path.getsize(genofile) > 0:
-                # Write header if it's the first time writing
-                if firstw:
-                    fw.writerow(myheader)
-                    firstw = False
-                fw.writerow([chr, i, genofile, snpfile])
-        except FileNotFoundError:
-            pass
+            # Check if the written file exists and is not empty
+            try:
+                if os.path.getsize(genofile) > 0:
+                    # Write header if it's the first time writing
+                    if firstw:
+                        fw.writerow(myheader)
+                        firstw = False
+                    fw.writerow([chr, i, genofile, snpfile])
+            except FileNotFoundError:
+                pass
 
     fout.close()
 

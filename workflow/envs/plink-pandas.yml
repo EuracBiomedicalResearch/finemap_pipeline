@@ -1,6 +1,7 @@
 name: plink-pandas
 dependencies:
   - bioconda::plink=1.90*
+  - bioconda::tabix=1.11
   - python=3.11.*
   - numpy
   - scipy
