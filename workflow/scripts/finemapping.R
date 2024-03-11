@@ -73,7 +73,7 @@ pheno_file <- snakemake@input[["phenofile"]]
 
 # Load parameters for data handling
 compute_ld <- snakemake@params[["use_ld"]]
-CHRIS <- snakemake@params[["chris_id"]] 
+CHRIS <- snakemake@params[["chris_id"]]
 
 # Load parameters for susieR model
 susie_min_abs_cor <- snakemake@params[["min_abs_corr"]]
@@ -107,7 +107,7 @@ if (ld_file_size > 0) {
   y <- pheno["Y"]
   sid <- pheno["IID"]
   if (CHRIS) {
-    rlog::log_info("Padding IDs...")
+    rlog::log_debug("Padding IDs...")
     sid <- sid %>% 
       mutate(IID = str_pad(IID, side = "left", width = 10, pad = 0))
   }
@@ -141,6 +141,7 @@ if (ld_file_size > 0) {
 
       #---- Read clump genotype file ----
       geno_file <- geno_info[i, "GENOFILE"]
+      # geno_file <- file.path(proj_path, geno_file)
       genos <- fread(geno_file)
       snps <- names(genos)[7:ncol(genos)]
       snps <- gsub("_.+", "", snps)
@@ -156,22 +157,21 @@ if (ld_file_size > 0) {
       genos_nona <- genos[which(!is.na(gsix))]
       ytmp <- y[gsix[!is.na(gsix)]]
       sidtmp <- sid[gsix[!is.na(gsix)]]
-      X <- as.matrix(genos_nona[, 7:ncol(genos_nona)]) * 1.0
+      X <- as.matrix(genos_nona[,7:ncol(genos_nona)]) * 1.0
 
       rlog::log_debug("Compute susieR model...\n")
-      if (compute_ld) {
+      if (compute_ld){
         betas <- smstattmp$BETA
         sebetas <- smstattmp$SE
-        n <- min(smstattmp$N, na.rm = TRUE)
+        n <- min(smstattmp$N, na.rm=TRUE)
 
-        rlog::log_info("Compute correlation matrix...")
+        rlog::log_debug("Compute correlation matrix...")
         R <- cor(X)
-        rlog::log_info("Run susie model on LD.")
+        rlog::log_debug("Run susie model on LD.")
         rss_ress <- tryCatch(
-          susie_rss(bhat = betas, shat = sebetas, n = n, R = R,
-                    max_iter = susie_iter, min_abs_corr = susie_min_abs_cor)
-          , error = err_handling
-        )
+          susie_rss(bhat = betas, shat = sebetas, n = n, R = R, max_iter = susie_iter, min_abs_corr = susie_min_abs_cor)
+        , error = err_handling
+          )
       } else {
         rlog::log_debug("Run susie model on genotype.")
         rss_ress <- tryCatch(
@@ -222,6 +222,7 @@ if (ld_file_size > 0) {
   cat(file = cs_smstat_file)
   cat(file = cs_rds_file)
 }
+
 
 rlog::log_info(cat("\n",
     "----------", "\n",
