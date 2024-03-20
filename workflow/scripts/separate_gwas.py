@@ -27,7 +27,7 @@ def main(inputfile, outdir, pval_thr=5e-8, pvalcol="LOG10P", pheno="",
 
     # Columns to write for the sumstat
     cols_to_write = ["CHROM", "GENPOS", "ID", pvalcol, "BETA", "SE", "N",
-                     "CHISQ", "ALLELE0", "ALLELE1"]
+                     "CHISQ", "ALLELE0", "ALLELE1", "A1FREQ"]
 
     print(f"Read gwas: {inputfile}")
     mygwas = extract_chr_from_smstat(inputfile, chrom=chrom)

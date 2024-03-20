@@ -3,175 +3,10 @@ import csv
 import pandas as pd
 import numpy as np
 import subprocess as sb
-from tempfile import NamedTemporaryFile
-
-
-class Clump(object):
-    def __init__(self, lead="", proxies=[], begin=0, end=0, **kwargs):
-        self.lead = lead
-        self.proxies = proxies
-
-        if begin > end:
-            self.begin = end
-            self.end = begin
-            self.strand = "-"
-        else:
-            self.begin = begin
-            self.end = end
-            self.strand = "+"
-
-        self._span = self.end - self.begin
-
-        try:
-            pval = kwargs["pvalue"]
-        except KeyError:
-            pval = None
-        self.pvalue = pval
-
-    @classmethod
-    def from_clumpfileline(cls, row):
-        lead = row[2]
-        proxies = get_snps_fromclump(row)
-        try:
-            pvalue = float(row[3])
-        except ValueError:
-            pvalue = 1
-
-        return cls(lead=lead, proxies=proxies, pvalue=pvalue)
-
-    @property
-    def pvalue(self):
-        return self._pvalue
-
-    @property
-    def lpvalue(self):
-        return -np.log10(self._pvalue)
-
-    @pvalue.setter
-    def pvalue(self, new):
-        try:
-            if new >= 0 and new <= 1:
-                self._pvalue = new
-            else:
-                raise ValueError
-        except ValueError:
-            print(f"Incorrect range for pvalue {new}")
-
-    @property
-    def span(self):
-        return self._span
-
-
-    def enlarge_clump(self, totsize=1000000):
-
-        if self.span == 0:
-            cllimits = self.get_span_from_clump()
-            clspan = cllimits[1] - cllimits[0]
-        else:
-            cllimits = self.get_interval()
-            clspan = self.span
-
-        if clspan < totsize:
-            newlimits = widen_span(cllimits, tot=totsize)
-            # newspan = np.array(cllimits)
-            # self.span = newspan
-        else:
-            newlimits = cllimits
-        self.set_interval(newlimits)
-
-        return self
-
-    def get_span_from_clump(self):
-        try:
-            pos = [ll.split(":")[1] for ll in self.proxies + [self.lead]
-                   if ll != "."]
-            pos = [int(p) for p in pos]
-            # print(pos)
-            # pos.append(self.begin)
-            # print(pos)
-        except IndexError:
-            # The list of proxies is empty
-            print("No proxies provided...")
-            pos = [0, 0]
-        except ValueError:
-            # The ID are not formatted as expected (chr:pos)
-            print("Cannot retrieve position from proxies")
-            pos = [0, 0]
-
-        return [min(pos), max(pos)]
-
-    def to_list(self):
-        return [self.lead] + self.proxies
-
-    def get_interval(self):
-        return [self.begin, self.end]
-
-    def set_interval(self, new):
-        if isinstance(new, list):
-            tmp = np.array(new)
-            tmp.sort()
-            try:
-                tmp.astype("int64")
-            except ValueError as e:
-                print(f"Please provide a list of numerical values to set \
-                      span: \n {e}")
-
-        if isinstance(new, np.ndarray):
-            tmp = new.copy()
-            tmp.sort()
-
-        if isinstance(new, dict):
-            tmp = self._span
-            try:
-                tmp[0] = np.int64(new['begin'])
-                tmp[1] = np.int64(new['end'])
-            except KeyError:
-                print("Please provide a correctly formed dictionary with \
-                      keys 'begin' and 'end'")
-            except ValueError:
-                print("Some values in the dictionary are not numeric")
-
-        self._span = tmp[-1] - tmp[0]
-        self.begin = tmp[0]
-        self.end = tmp[-1]
-
-    def __add__(self, other):
-        if isinstance(other, Clump):
-            px = self.proxies + other.proxies
-            ix = np.argsort(np.array([self.pvalue, other.pvalue]))
-
-            if ix[0] == 0:
-                ll = self.lead
-                px += [other.lead]
-                pval = self.pvalue
-            else:
-                ll = other.lead
-                px += [self.lead]
-                pval = other.pvalue
-
-            # Initialize new clump
-            res = Clump(lead=ll, proxies=px, pvalue=pval)
-
-            # Update interval
-            spanarra = np.array([self.get_interval(), other.get_interval()])
-            st = spanarra.min(axis=0)[0]
-            en = spanarra.max(axis=0)[-1]
-            res.set_interval([st, en])
-
-            return res
-        else:
-            raise NotImplementedError(f"Cannot add Clump class to \
-                                      type {other.__class__}")
-
-
-def get_snps_fromclump(line):
-    if line[-1] == 'NONE':
-        snps = []
-    else:
-        snps = line[-1].replace('(1)', '')
-        snps = snps.split(',')
-
-    return snps
+from tempfile import NamedTemporaryFile, TemporaryDirectory
+import clumps
+import gcta
+import credible_sets as cs
 
 
 def read_clump_file(file, enlarge=False, merge=False, **kwargs):
@@ -214,7 +49,7 @@ def read_clump_file(file, enlarge=False, merge=False, **kwargs):
                 #     proxies=snps,
                 #     pvalue=float(ll[3])
                 # )
-                cc = Clump.from_clumpfileline(ll)
+                cc = clumps.Clump.from_clumpfileline(ll)
                 mylist.append(cc)
 
     # Enlarge clump to a minimum size of `totsize`
@@ -223,16 +58,85 @@ def read_clump_file(file, enlarge=False, merge=False, **kwargs):
     if enlarge:
         try:
             totsize = kwargs['totsize']
+            totsize = np.abs(float(totsize))
         except KeyError:
             totsize = 1e6
-        # mylist = [enlarge_clump(cl, totsize=totsize) for cl in mylist]
         mylist = [cl.enlarge_clump(totsize=totsize) for cl in mylist]
 
     # Merge overlapping clumps
     if merge:
         mylist = sort_and_merge(mylist)
 
+    for i, cl in enumerate(mylist):
+        ii = cl.get_span_from_clump()
+        cl.set_interval(ii)
+        mylist[i] = cl
+
     return mylist
+
+
+def plink_wrapper(sumstat, plinkfile, logp1=7.3, logp2=1.3, r2=0.1,
+                  kb=10000, **kwargs):
+
+    cmd = ['plink2',
+           '--bfile', plinkfile,
+           '--clump', sumstat,
+           '--clump-log10', "'input-only'"]
+    if logp1 > 0:
+        cmd.extend(['--clump-log10-p1', str(logp1)])
+    if logp2 > 0:
+        cmd.extend(['--clump-log10-p2', str(logp2)])
+    if r2 > 0 and r2 < 1:
+        cmd.extend(['--clump-r2', str(r2)])
+    if kb:
+        cmd.extend(['--clump-kb', str(np.abs(kb))])
+
+    try:
+        pvalcol = kwargs['pvalcol']
+        cmd.extend(['--clump-field', pvalcol])
+    except KeyError:
+        print('Use default p-value column in summary stats')
+
+    try:
+        snpsid = kwargs['ID']
+        cmd.extend(['--clump-snp-field', 'ID'])
+    except KeyError:
+        pass
+
+    try:
+        snplist = kwargs['snplist']
+    except KeyError:
+        snplist = []
+
+    try:
+        memory = kwargs['memory']
+        cmd.extend(['--memory', str(memory)])
+    except KeyError:
+        pass
+
+
+    with TemporaryDirectory() as ftmp:
+        if snplist:
+            print(f"Select {len(snplist)} snps...")
+            snpfile = os.path.join(ftmp, "snplist")
+            with open(snpfile, 'w') as sp:
+                for s in snplist:
+                    sp.write(s + "\n")
+            cmd.extend(['--extract', snpfile])
+
+        # Add output file parameter
+        ofile = os.path.join(ftmp, "clump")
+        cmd.extend(['--out', ofile])
+
+        # Run the command and read file
+        cp = sb.run(' '.join(cmd), shell=True)
+
+        clumplist = []
+        if cp.returncode == 0:
+            # Read clumping file
+            clumplist = read_clump_file(ofile + ".clumps", **kwargs)
+
+    return clumplist
 
 
 def compute_ld(snps, clid, plinkfile, dryrun=False, prefix="ld_clump",
@@ -257,8 +161,6 @@ def compute_ld(snps, clid, plinkfile, dryrun=False, prefix="ld_clump",
     for s in snps:
         ff.write(s)
         ff.write("\n")
-        # ftmp.write(s)
-        # ftmp.write("\n")
     ff.close()
 
     # DO NOT COMPUTE LD matrix with plink, sometimes it's not semi-positive
@@ -299,19 +201,6 @@ def process_ld_file(ldfile):
     return df
 
 
-def widen_span(span, tot):
-    span2 = np.array(span)
-    span2.sort()
-    spandist = np.diff(span2)[0]
-    totdiff = tot - spandist
-
-    if totdiff > 0:
-        span2[0] -= totdiff / 2.0
-        span2[1] += totdiff / 2.0
-
-    return span2
-
-
 def intersect(cl1, cl2):
     cl1.sort()
     cl2.sort()
@@ -337,36 +226,6 @@ def intersect(cl1, cl2):
             ck = True
 
     return ck
-
-
-def main_tmp(clumpfile, gendata, outfile="", **kwargs):
-    # Get info on genetic data
-    # gg = GenDataList.from_json("../../metaboGWAS/genetic_data.json")
-    # gg = GenDataList.from_json(gendata)
-    # ggg = gg.gendata["HRC13K"]
-
-    genopath = {os.path.dirname(f) for f in gendata.get_plinkfiles()}
-    genopath = genopath.pop()
-
-    # Read clump file
-    cldf = read_cl_file(clumpfile)
-    clumplist = read_clump_file(clumpfile)
-    dflist = []
-
-    # Run LD computation for each clumping region
-
-    for clump in cldf.iterrows():
-        ldfile = compute_ld(clump, genopath=genopath,
-                            prefix=outfile, **kwargs)
-        # Get list of betas and sd for betas
-        try:
-            dflist.append(process_ld_file(ldfile, clump[0]))
-        except FileNotFoundError:
-            print(f"Cannot find file {ldfile}")
-    dfall = pd.concat(dflist, ignore_index=True)
-
-    print(f"Export csv file to {outfile}")
-    dfall.to_csv(outfile, sep="\t", index=False, header=True)
 
 
 def sort_and_merge(clumplist):
@@ -431,8 +290,8 @@ def main(clumpfile, plinkfile, chr, outfile="",  **kwargs):
         for i, cl in enumerate(clumplist):
             snps = cl.to_list()
             genofile, snpfile = compute_ld(snps, clid=i,
-                                        plinkfile=plinkfile,
-                                        prefix=outfile, **kwargs)
+                                            plinkfile=plinkfile,
+                                            prefix=outfile, **kwargs)
 
             # Check if the written file exists and is not empty
             try:
@@ -449,14 +308,122 @@ def main(clumpfile, plinkfile, chr, outfile="",  **kwargs):
 
     return outfile
 
+def run_cred_set_susier(clumplist, sumstatdf, plinkfile, chrom,
+                        clid=0, **kwargs):
+    basename = os.path.dirname(__file__)
+    reslist = []
+    for i, cl in enumerate(clumplist):
+        print(f"Processing clumpid: {clid} - {i}")
+        span = cl.get_interval()
+        lead = sumstatdf.loc[sumstatdf['ID'] == cl.lead, :]
+
+        # Extract window of the sumstat
+        sm_wind = ((sumstatdf['CHROM'] == lead.iloc[0]['CHROM']) &
+                    (sumstatdf['GENPOS'] >= span[0]) &
+                    (sumstatdf['GENPOS'] <= span[1]))
+        snplist = sumstatdf.loc[sm_wind, 'ID']
+
+        with TemporaryDirectory() as tmpd:
+            myprefix = os.path.join(tmpd, "ld_clump")
+            ld, snplistfile = compute_ld(snplist.to_list(), plinkfile=plinkfile,
+                            clid=clid,
+                            prefix=myprefix, **kwargs)
+            smfile = os.path.join(tmpd, "smfile.csv")
+            sumstatdf.to_csv(smfile, index=False, sep='\t')
+
+            outfile = os.path.join(tmpd, "cs_out.csv")
+            cmd = ['Rscript', os.path.join(basename, 'susier.R'),
+                   ld, smfile,
+                   outfile, str(clid)]
+
+            print(f"File {ld} {os.path.exists(ld)}")
+            # Run susier.py on the window
+            cp = sb.run(' '.join(cmd), shell=True)
+            if cp.returncode != 0:
+                print("Azzzz....got an error!")
+                resdf = None
+            else:
+                resdf = pd.read_csv(outfile, header=0, sep="\t")
+                reslist.append(resdf)
+    resdf = pd.concat(reslist)
+    return resdf
+
+
+def main_clumping(sumstat, plinkfile, outfile, chrom, memory=16000, **kwargs):
+
+    # try:
+    #     totsize = int(kwargs["totsize"])
+    # except KeyError:
+    #     totsize = 1e6
+    # except ValueError as e:
+    #     print("Invalid totsize value. Set it to default: 1e6", e)
+    #     totsize = 1e6
+
+    analysis_conf = kwargs["analysis_conf"]
+    sumstatdf = pd.read_csv(sumstat, header=0, sep='\t')
+
+    print("Clumping Step1")
+    clumplist = plink_wrapper(sumstat, plinkfile, memory=memory,
+                              **analysis_conf['clumping'], **kwargs,
+                              enlarge=True, merge=True, )
+    print("Clumping Step2")
+    for i, cl1 in enumerate(clumplist):
+        clumplist2 = plink_wrapper(sumstat, plinkfile, memory=memory,
+                                logp1=-1, logp2=-1, kb=500, r2=0.5,
+                                snplist=cl1.to_list(), **kwargs,
+                                ID=analysis_conf["clumping"]["ID"],
+                                pvalcol=analysis_conf["clumping"]["pvalcol"]
+                                )
+        resdf = run_cred_set_susier(clumplist2, sumstatdf, plinkfile, chrom=chrom,
+                            clid=i)
+        print(resdf)
+
+    # print(spanres)
+    # print(np.diff(spanres))
+    # print(f"Clump1 span: {np.diff([mi1, ma1])}")
+
+def main_conditional(sumstat, plinkfile, outfile="", chrom=None, memory=16000,
+                     **kwargs):
+    analysis_conf = kwargs.pop("analysis_conf")
+    # analysis_conf = kwargs["analysis_config"]
+    sumstatdf = pd.read_csv(sumstat, header=0, sep='\t')
+
+    try:
+        tmpdir = kwargs.pop("tmpdir")
+    except KeyError:
+        tmpdir = None
+    # Get top loci based on conditional analysis
+    cc = gcta.ConditionalAnalysis(tmpdir=tmpdir)
+    toploci = cc.get_top_loci(sumstatdf, plinkfile, chrom=chrom, **kwargs)
+
+    # Initialize the results
+    cred_res = []
+    for i, index_var in enumerate(toploci.to_dict(orient='records')):
+        cred_set = cs.credible_set(index_var=index_var, sumstat=sumstatdf,
+                                   toploci=toploci, plinkfile=plinkfile, prior_sd=1.0,
+                                   cs_prob=0.95, stype="quant", tmpdir=tmpdir
+                                   )
+        if cred_set.shape[0] > 0:
+            cred_set['index_var'] = index_var['ID']
+            cred_set['csid'] = f"{chrom}_{i}"
+            cred_res.append(cred_set)
+
+    # Concatenate results
+    cred_res_df = pd.concat(cred_res, axis=0)
+
+    return cred_res_df
+
 
 if __name__ == "__main__":
+    finemap_config = snakemake.config
+
     clumplist = main(clumpfile=snakemake.input[0],
                      plinkfile=snakemake.params.plinkfile,
                      outfile=snakemake.output[0],
                      chr=snakemake.wildcards.chrom,
                      memory=snakemake.resources.mem_mb,
-                     totsize=snakemake.params.totsize)
+                     totsize=snakemake.params.totsize,
+                     analysis_config=finemap_config)
     # import argparse
     # parser = argparse.ArgumentParser()
 

@@ -7,4 +7,19 @@ dependencies:
   - scipy
   - pandas
   - pip
+  - bioconda::plink2
+  - r-base==4.3.0
+  - r-susier==0.12.35
+  - r-tidyverse==2.0.0
+  - r-dplyr==1.1.2
+  - r-stringr==1.5.0
+  - r-purrr==1.0.1
+  - r-glue==1.6.2
+  - r-ggplot2==3.4.2
+  - r-ggpubr==0.6.0
+  - r-data.table==1.14.8
+  - r-rcpp==1.0.*
+  - r-rcppeigen==0.3.3.*
+  - r-markdown==1.10
+  - r-rlog==0.1.0
 

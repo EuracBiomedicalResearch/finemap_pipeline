@@ -167,6 +167,39 @@ rule enlarge_and_merge:
   script:
     "scripts/run_susieR.py"
 
+
+rule clumping_step2:
+  input:
+    rules.enlarge_and_merge.output[0]
+  output:
+    pjoin(outdir, "{pheno}/ld/chr{chrom}.ld")
+  params:
+    infile = get_pfile_from_chrom,
+    ofile = lambda wildcards, output : output[0].replace(".clumps", ""),
+    clump_r2 = 0.5,
+    clump_kb = 500,
+    sampfile = config["sample_file"]
+  resources:
+    mem_mb = 16000
+  conda:
+    "envs/plink2.yml"
+  shell:
+    """
+    if [ -s {input} ]
+    then
+      plink2 --bfile {params.infile} --clump {input.smstat} \
+      --clump-log10 'input-only' --clump-field {pvalcol} \
+      --clump-r2 {params.clump_r2} --clump-kb {params.clump_kb} \
+      --clump-snp-field ID  --out {params.ofile} \
+      --memory {resources.mem_mb} \
+      --keep {params.sampfile}
+    else
+      touch {output[0]}
+      touch {output[1]}
+    fi
+    """
+
+
 rule run_susieR:
   input:
     ldfile = rules.enlarge_and_merge.output,
