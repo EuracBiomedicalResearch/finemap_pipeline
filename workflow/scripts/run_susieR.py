@@ -350,35 +350,38 @@ def run_cred_set_susier(clumplist, sumstatdf, plinkfile, chrom,
     return resdf
 
 
-def main_clumping(sumstat, plinkfile, outfile="", chrom=None, memory=16000, **kwargs):
+def main_clumping(sumstat, plinkfile, outfile="", chrom=None, memory=16000,
+                  logger=None, **kwargs):
 
-    # try:
-    #     totsize = int(kwargs["totsize"])
-    # except KeyError:
-    #     totsize = 1e6
-    # except ValueError as e:
-    #     print("Invalid totsize value. Set it to default: 1e6", e)
-    #     totsize = 1e6
+    logger = check_logger(logger)
+    logger.info("Start credible set analysis using clumping")
 
     analysis_conf = kwargs["analysis_conf"]
     sumstatdf = pd.read_csv(sumstat, header=0, sep='\t')
 
-    print("Clumping Step1")
+    logger.info("Clumping Step1")
     clumplist = plink_wrapper(sumstat, plinkfile, memory=memory,
                               **analysis_conf['clumping'], **kwargs,
                               enlarge=False, merge=False)
-    print("Clumping Step2")
+
+    # Extract potential toploci
+    tpid = [cl.lead for cl in clumplist]
+    toploci = sumstatdf[sumstatdf['ID'].isin(tpid), :]
+
+    # Running second step clumping around toploci region
+    logger.info("Clumping Step2")
     reslist = []
     for i, cl1 in enumerate(clumplist):
         clumplist2 = plink_wrapper(sumstat, plinkfile, memory=memory,
                                    logp1=-1, logp2=-1, kb=500, r2=0.5,
-                                   snplist=cl1.to_list(), **kwargs,
+                                   snplist=cl1.to_list(),
                                    ID=analysis_conf["clumping"]["ID"],
-                                pvalcol=analysis_conf["clumping"]["pvalcol"],
-                                   enlarge=True, merge=True
-                                )
-        resdf = run_cred_set_susier(clumplist2, sumstatdf, plinkfile, chrom=chrom,
-                                    clid=i)
+                                   pvalcol=analysis_conf["clumping"]["pvalcol"],
+                                   enlarge=True, merge=True, **kwargs
+                                   )
+        # Run credible set analysis using SusieR
+        resdf = run_cred_set_susier(clumplist2, sumstatdf, plinkfile,
+                                    chrom=chrom, clid=i, index_var=cl1.lead)
         try:
             if resdf.shape[0] > 0:
                 reslist.append(resdf)
@@ -386,17 +389,17 @@ def main_clumping(sumstat, plinkfile, outfile="", chrom=None, memory=16000, **kw
             pass
 
     resdfall = pd.concat(reslist)
-    return resdfall
+    return {'toploci': toploci, 'credible_set': resdfall}
 
-    # print(spanres)
-    # print(np.diff(spanres))
-    # print(f"Clump1 span: {np.diff([mi1, ma1])}")
 
 def main_conditional(sumstat, plinkfile, outfile="", chrom=None, memory=16000,
-                     **kwargs):
-    logging.info("Starting credible set extraction with conditional method")
+                     logger=None, **kwargs):
+    # TODO: Parametrize type of GWAS (quantitative/binary), it should be done
+    # at general configuration level
+    logger = check_logger(logger)
+    logger.info("Starting credible set extraction with conditional method")
+
     analysis_conf = kwargs.pop("analysis_conf")
-    # analysis_conf = kwargs["analysis_config"]
     sumstatdf = pd.read_csv(sumstat, header=0, sep='\t')
 
     try:
@@ -406,16 +409,17 @@ def main_conditional(sumstat, plinkfile, outfile="", chrom=None, memory=16000,
 
     # Get top loci based on conditional analysis
     cc = gcta.ConditionalAnalysis(tmpdir=tmpdir)
-    logging.info("Get top loci")
+    logger.info("Get top loci")
     toploci = cc.get_top_loci(sumstatdf, plinkfile, chrom=chrom, **kwargs)
     logging.info(f"Found: {toploci.shape[0]} top loci!")
 
     # Initialize the results
     cred_res = []
-    logging.info("Exctract credible set")
+    logger.info("Exctract credible set")
     for i, index_var in enumerate(toploci.to_dict(orient='records')):
         cred_set = cs.credible_set(index_var=index_var, sumstat=sumstatdf,
-                                   toploci=toploci, plinkfile=plinkfile, prior_sd=1.0,
+                                   toploci=toploci, plinkfile=plinkfile,
+                                   prior_sd=1.0,
                                    cs_prob=0.95, stype="quant", tmpdir=tmpdir
                                    )
         if cred_set.shape[0] > 0:
@@ -426,7 +430,7 @@ def main_conditional(sumstat, plinkfile, outfile="", chrom=None, memory=16000,
     # Concatenate results
     cred_res_df = pd.concat(cred_res, axis=0)
 
-    return cred_res_df
+    return {'toploci': toploci, 'credible_set': cred_res_df}
 
 
 def write_output(result_df, outfile="output.csv"):
@@ -435,6 +439,13 @@ def write_output(result_df, outfile="output.csv"):
     except AttributeError:
         f = open(outfile, "w")
         f.close()
+
+
+def check_logger(logger):
+    if logger is None:
+        logger = logging.getLogger("CredibleSet")
+        logger.setLevel(logging.INFO)
+    return logger
 
 
 if __name__ == "__main__":
@@ -453,17 +464,24 @@ if __name__ == "__main__":
         run_func = main_conditional
     if finemap_config['method'] == "clumping":
         run_func = main_clumping
+    from snakemake.logging import Logger
 
+
+    # logger = sl.logging.getLogger(__name__)
+    # logger.setLevel(sl.logging.INFO)
+    logger = Logger()
     cred_set_df = run_func(sumstat=snakemake.input["smstat"],
                            plinkfile=snakemake.params["plinkfile"],
                            outfile=snakemake.output["credible_set"],
                            chrom=snakemake.wildcards.chrom,
                            memory=snakemake.resources.mem_mb,
-                           analysis_conf=finemap_config
+                           analysis_conf=finemap_config,
+                           logger=logger
                            )
-    write_output(cred_set_df, outfile=snakemake.output["credible_set"])
+    for k in ['credible_set', 'toploci']:
+        write_output(cred_set_df[k], outfile=snakemake.output[k])
 
-
+    # write_output(cred_set_df, outfile=snakemake.output["credible_set"])
     # clumplist = main(clumpfile=snakemake.input[0],
     #                  plinkfile=snakemake.params.plinkfile,
     #                  outfile=snakemake.output[0],

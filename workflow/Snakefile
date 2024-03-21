@@ -76,9 +76,9 @@ rule all:
   input:
     pjoin(outdir, "all_phenos_summary.cs")
 
-# rule test_rule:
-#   input:
-#     expand(pjoin(outdir, "{pheno}/summary_credible_sets.csv"), pheno=["meta_6"])
+rule test_rule:
+  input:
+    expand(pjoin(outdir, "{pheno}/summary_credible_sets.csv"), pheno=["meta_6"])
 
 # Rule to export bed files for each credible set
 rule beds:
@@ -159,7 +159,7 @@ rule credible_set:
     smstat = pjoin(outdir, "{pheno}/tmp/chr{chrom}_sumstat.csv"),
   output:
     credible_set = pjoin(outdir, "{pheno}/cred_set_chr{chrom}.csv"),
-    # tophits = pjoin(outdir, "{pheno}/tophist_chr{chrom}.csv")
+    toploci = pjoin(outdir, "{pheno}/tophist_chr{chrom}.csv")
   params:
     plinkfile = get_pfile_from_chrom,
     tmpdir = pjoin(outdir, "{pheno}/tmp")
