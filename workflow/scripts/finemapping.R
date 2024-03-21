@@ -186,7 +186,11 @@ if (ld_file_size > 0) {
         rlog::log_info("Found some credible sets!")
         vars <- summary(rss_ress)
         allsnps <- vars$vars
-        allsnps <- allsnps %>% mutate(ID = snps[variable])
+        allsnps <- allsnps %>% 
+          mutate(
+            ID = snps[variable],
+            is_95_credset=variable_prob >= 0.95,
+            is_99_credset=variable_prob >= 0.99)
 
         smstatcs <- smstattmp %>%
           left_join(allsnps, by = "ID") %>%

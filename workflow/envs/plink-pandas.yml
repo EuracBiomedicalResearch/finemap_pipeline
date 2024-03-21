@@ -22,4 +22,5 @@ dependencies:
   - r-rcppeigen==0.3.3.*
   - r-markdown==1.10
   - r-rlog==0.1.0
+  - gcta==1.94.1
 

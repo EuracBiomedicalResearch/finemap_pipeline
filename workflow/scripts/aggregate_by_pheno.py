@@ -90,10 +90,10 @@ def summarize_df(df, cols=[]):
     dfres : pandas.DataFrame
         a summary dataframe. One line for each credible set.
     """
-    gg = df.groupby(["CHROM", "cs"])
-    idx = gg.agg({"variable_prob": "idxmax", "N": "size"})
-    tmp = df.loc[idx["variable_prob"]]
-    idx = idx.set_index("variable_prob")
+    gg = df.groupby(["CHROM", "index_var", "csid"])
+    idx = gg.agg({"postProb": "idxmax", "N": "size"})
+    tmp = df.loc[idx["postProb"]]
+    idx = idx.set_index("postProb")
     tmp["N_VARIANTS"] = idx["N"]
     if cols:
         try:

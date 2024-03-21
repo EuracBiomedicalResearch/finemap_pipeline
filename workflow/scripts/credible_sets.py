@@ -181,7 +181,7 @@ def credible_set(index_var, sumstat, toploci, plinkfile, prior_sd=1,
     cc = gcta.ConditionalAnalysis(**kwargs)
     # for vv in toploci.to_dict(orient='records'):
     # Cycle over the index variants (if any)...
-    print(f"computing: {index_var}")
+    print(f"Computing: {index_var['ID']}")
     pos = index_var['GENPOS']
 
     # Get region around the index snp
@@ -211,8 +211,3 @@ def credible_set(index_var, sumstat, toploci, plinkfile, prior_sd=1,
     print(f"Tot. SNPs: {dfcs.shape[0]}")
 
     return dfcs
-
-
-def susier_wrapper(index_var, sumstat, toploci, plinkfile, **kwargs):
-
-    pth = os.path.basename(__file__)

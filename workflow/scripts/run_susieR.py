@@ -7,6 +7,7 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 import clumps
 import gcta
 import credible_sets as cs
+import logging
 
 
 def read_clump_file(file, enlarge=False, merge=False, **kwargs):
@@ -334,7 +335,7 @@ def run_cred_set_susier(clumplist, sumstatdf, plinkfile, chrom,
             outfile = os.path.join(tmpd, "cs_out.csv")
             cmd = ['Rscript', os.path.join(basename, 'susier.R'),
                    ld, smfile,
-                   outfile, str(clid)]
+                   outfile, str(clid), lead['ID']]
 
             print(f"File {ld} {os.path.exists(ld)}")
             # Run susier.py on the window
@@ -349,7 +350,7 @@ def run_cred_set_susier(clumplist, sumstatdf, plinkfile, chrom,
     return resdf
 
 
-def main_clumping(sumstat, plinkfile, outfile, chrom, memory=16000, **kwargs):
+def main_clumping(sumstat, plinkfile, outfile="", chrom=None, memory=16000, **kwargs):
 
     # try:
     #     totsize = int(kwargs["totsize"])
@@ -365,18 +366,27 @@ def main_clumping(sumstat, plinkfile, outfile, chrom, memory=16000, **kwargs):
     print("Clumping Step1")
     clumplist = plink_wrapper(sumstat, plinkfile, memory=memory,
                               **analysis_conf['clumping'], **kwargs,
-                              enlarge=True, merge=True, )
+                              enlarge=False, merge=False)
     print("Clumping Step2")
+    reslist = []
     for i, cl1 in enumerate(clumplist):
         clumplist2 = plink_wrapper(sumstat, plinkfile, memory=memory,
-                                logp1=-1, logp2=-1, kb=500, r2=0.5,
-                                snplist=cl1.to_list(), **kwargs,
-                                ID=analysis_conf["clumping"]["ID"],
-                                pvalcol=analysis_conf["clumping"]["pvalcol"]
+                                   logp1=-1, logp2=-1, kb=500, r2=0.5,
+                                   snplist=cl1.to_list(), **kwargs,
+                                   ID=analysis_conf["clumping"]["ID"],
+                                pvalcol=analysis_conf["clumping"]["pvalcol"],
+                                   enlarge=True, merge=True
                                 )
         resdf = run_cred_set_susier(clumplist2, sumstatdf, plinkfile, chrom=chrom,
-                            clid=i)
-        print(resdf)
+                                    clid=i)
+        try:
+            if resdf.shape[0] > 0:
+                reslist.append(resdf)
+        except pd.errors.EmptyDataError as e:
+            pass
+
+    resdfall = pd.concat(reslist)
+    return resdfall
 
     # print(spanres)
     # print(np.diff(spanres))
@@ -384,6 +394,7 @@ def main_clumping(sumstat, plinkfile, outfile, chrom, memory=16000, **kwargs):
 
 def main_conditional(sumstat, plinkfile, outfile="", chrom=None, memory=16000,
                      **kwargs):
+    logging.info("Starting credible set extraction with conditional method")
     analysis_conf = kwargs.pop("analysis_conf")
     # analysis_conf = kwargs["analysis_config"]
     sumstatdf = pd.read_csv(sumstat, header=0, sep='\t')
@@ -392,12 +403,16 @@ def main_conditional(sumstat, plinkfile, outfile="", chrom=None, memory=16000,
         tmpdir = kwargs.pop("tmpdir")
     except KeyError:
         tmpdir = None
+
     # Get top loci based on conditional analysis
     cc = gcta.ConditionalAnalysis(tmpdir=tmpdir)
+    logging.info("Get top loci")
     toploci = cc.get_top_loci(sumstatdf, plinkfile, chrom=chrom, **kwargs)
+    logging.info(f"Found: {toploci.shape[0]} top loci!")
 
     # Initialize the results
     cred_res = []
+    logging.info("Exctract credible set")
     for i, index_var in enumerate(toploci.to_dict(orient='records')):
         cred_set = cs.credible_set(index_var=index_var, sumstat=sumstatdf,
                                    toploci=toploci, plinkfile=plinkfile, prior_sd=1.0,
@@ -414,16 +429,48 @@ def main_conditional(sumstat, plinkfile, outfile="", chrom=None, memory=16000,
     return cred_res_df
 
 
+def write_output(result_df, outfile="output.csv"):
+    try:
+        result_df.to_csv(outfile, sep="\t", index=False)
+    except AttributeError:
+        f = open(outfile, "w")
+        f.close()
+
+
 if __name__ == "__main__":
     finemap_config = snakemake.config
 
-    clumplist = main(clumpfile=snakemake.input[0],
-                     plinkfile=snakemake.params.plinkfile,
-                     outfile=snakemake.output[0],
-                     chr=snakemake.wildcards.chrom,
-                     memory=snakemake.resources.mem_mb,
-                     totsize=snakemake.params.totsize,
-                     analysis_config=finemap_config)
+    # finemap_config["sumstat"] = snakemake.input["smstat"]
+    # finemap_config["plinkfile"] = snakemake.params["plinkfile"]
+    # finemap_config["chrom"] = snakemake.wildcards.chrom
+    # try:
+    #     finemap_config["memory"] = snakemake.resources.mem_mb
+    # except KeyError:
+    #     pass
+    # main_wrap(outfile=snakemake.output["credible_set"], **finemap_config)
+
+    if finemap_config['method'] == "conditional":
+        run_func = main_conditional
+    if finemap_config['method'] == "clumping":
+        run_func = main_clumping
+
+    cred_set_df = run_func(sumstat=snakemake.input["smstat"],
+                           plinkfile=snakemake.params["plinkfile"],
+                           outfile=snakemake.output["credible_set"],
+                           chrom=snakemake.wildcards.chrom,
+                           memory=snakemake.resources.mem_mb,
+                           analysis_conf=finemap_config
+                           )
+    write_output(cred_set_df, outfile=snakemake.output["credible_set"])
+
+
+    # clumplist = main(clumpfile=snakemake.input[0],
+    #                  plinkfile=snakemake.params.plinkfile,
+    #                  outfile=snakemake.output[0],
+    #                  chr=snakemake.wildcards.chrom,
+    #                  memory=snakemake.resources.mem_mb,
+    #                  totsize=snakemake.params.totsize,
+    #                  analysis_config=finemap_config)
     # import argparse
     # parser = argparse.ArgumentParser()
 

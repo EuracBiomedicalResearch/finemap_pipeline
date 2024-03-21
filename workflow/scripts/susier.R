@@ -72,6 +72,7 @@ genotype_file <- args[1]
 sumstat_file <- args[2]
 cs_smstat_file <- args[3]
 clid <- args[4]
+index_var <- args[5]
 
 # Load parameters for data handling
 # compute_ld <- snakemake@params[["use_ld"]]
@@ -108,29 +109,7 @@ if (ld_file_size > 0) {
   rlog::log_debug("Start preprocessing for susieR")
   geno_info <- read.table(genotype_file, header = TRUE, sep = "\t")
 
-  #---- Read phenotype file ----
   rlog::log_debug(glue("Reading phenotype file: {pheno_file}"))
-  # pheno <- read.table(pheno_file, header = TRUE, sep = "\t")
-  # y <- pheno["Y"]
-  # sid <- pheno["IID"]
-  # if (CHRIS) {
-  #   rlog::log_debug("Padding IDs...")
-  #   sid <- sid %>% 
-  #     mutate(IID = str_pad(IID, side = "left", width = 10, pad = 0))
-  # }
-
-  # Remove NA from sample list
-  # nonasamp <- which(!is.na(y))
-  # sid <- sid[nonasamp, ]
-  # y <- y[nonasamp, ]
-
-  # if (length(nonasamp) == 0){
-  # rlog::log_error("No samples left for analysis...")
-  # rlog::log_error("Please check the overlap between sample ID in
-  # genotype files and phenotype file.")
-  # quit(save="no", status=1)
-# } else {
-  #---- read summary stat ----
   smstat <- fread(sumstat_file, header = TRUE, sep = "\t")
 
   #---- Prepare the result list ----
@@ -138,16 +117,10 @@ if (ld_file_size > 0) {
   cs_report_l <- list()
   cs_rssfit_l <- list()
 
-  #---- Get clump id and chromosome ----
-  # clid <- geno_info[i, "CLUMPID"]
-  # mychrom <- geno_info[i, "CHROM"]
-
   #---- Logging ----
   rlog::log_info(glue("Processing clump id {clid}"))
 
   #---- Read clump genotype file ----
-  # geno_file <- geno_info[i, "GENOFILE"]
-  # geno_file <- file.path(proj_path, geno_file)
   genos <- fread(genotype_file)
   snps <- names(genos)[7:ncol(genos)]
   snps <- gsub("_.+", "", snps)
@@ -159,10 +132,6 @@ if (ld_file_size > 0) {
   smstattmp <- smstattmp[ix, ]
 
   #---- Match phenotype with genotypes ----
-  # gsix <- match(genos$IID, sid)
-  # genos_nona <- genos[which(!is.na(gsix))]
-  # ytmp <- y[gsix[!is.na(gsix)]]
-  # sidtmp <- sid[gsix[!is.na(gsix)]]
   X <- as.matrix(genos[, 7:ncol(genos)]) * 1.0
 
   rlog::log_debug("Compute susieR model...\n")
@@ -195,8 +164,9 @@ if (ld_file_size > 0) {
     allsnps <- allsnps %>% 
       mutate(
               ID = snps[variable],
-              is_95_cred=variable_prob >= 0.95,
-              is_99_cred=variable_prob >= 0.99
+              is_95_cred = variable_prob >= 0.95,
+              is_99_cred = variable_prob >= 0.99,
+              index_var = index_var
       )
 
     smstatcs <- smstattmp %>%
@@ -220,7 +190,8 @@ if (ld_file_size > 0) {
               postProb = 0,
               csid = paste(clid, 0, sep="_"),
               is_95_cred = FALSE,
-              is_99_cred = FALSE
+              is_99_cred = FALSE,
+              index_var = index_var
       )
   }
   

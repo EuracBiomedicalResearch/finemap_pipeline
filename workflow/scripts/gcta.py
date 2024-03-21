@@ -40,10 +40,15 @@ class ConditionalAnalysis(object):
         except KeyError:
             tmpdir = None
 
-        if os.path.exists(tmpdir):
-            self.tmpdir = tmpdir
-        else:
-            self.tmpdir = mkdtemp(dir=tmpdir)
+        try:
+            os.path.exists(tmpdir)
+            if os.path.exists(tmpdir):
+                self.tmpdir = tmpdir
+            else:
+                self.tmpdir = mkdtemp(dir=tmpdir)
+        except TypeError:
+            self.tmpdir = mkdtemp()
+
         self.smstat = os.path.join(self.tmpdir, "gcta_sumstat.csv")
         self.snplist = os.path.join(self.tmpdir, "gcta_snplist.csv")
 
@@ -263,9 +268,10 @@ class ConditionalAnalysis(object):
                 sm_cond = pd.merge(sumstat_wind,
                                    cmadf.loc[:, ["ID", "bC", "bC_se", "pC"]])
                 sm_cond = sm_cond.rename(columns={
-                    'BETA_COND': 'bC', 'PVAL_COND': 'pC', 'SE_COND': 'bC_se'
+                    'bC': 'BETA_COND', 'pC': 'PVAL_COND', 'bC_se': 'SE_COND'
                 })
             except FileNotFoundError:
+                print("Cannot find the file cma.cojo")
                 sm_cond = sumstat_wind.copy()
                 for cc in ['BETA_COND', 'PVAL_COND', 'SE_COND']:
                     sm_cond[cc] = None
