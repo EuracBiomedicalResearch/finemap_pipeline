@@ -366,7 +366,7 @@ def main_clumping(sumstat, plinkfile, outfile="", chrom=None, memory=16000,
 
     # Extract potential toploci
     tpid = [cl.lead for cl in clumplist]
-    toploci = sumstatdf[sumstatdf['ID'].isin(tpid), :]
+    toploci = sumstatdf[sumstatdf["ID"].isin(tpid), :]
 
     # Running second step clumping around toploci region
     logger.info("Clumping Step2")
@@ -389,7 +389,7 @@ def main_clumping(sumstat, plinkfile, outfile="", chrom=None, memory=16000,
             pass
 
     resdfall = pd.concat(reslist)
-    return {'toploci': toploci, 'credible_set': resdfall}
+    return {"toploci": toploci, "credible_set": resdfall}
 
 
 def main_conditional(sumstat, plinkfile, outfile="", chrom=None, memory=16000,
@@ -400,6 +400,7 @@ def main_conditional(sumstat, plinkfile, outfile="", chrom=None, memory=16000,
     logger.info("Starting credible set extraction with conditional method")
 
     analysis_conf = kwargs.pop("analysis_conf")
+    cond_conf = analysis_conf["credible_set"]
     sumstatdf = pd.read_csv(sumstat, header=0, sep='\t')
 
     try:
@@ -410,27 +411,31 @@ def main_conditional(sumstat, plinkfile, outfile="", chrom=None, memory=16000,
     # Get top loci based on conditional analysis
     cc = gcta.ConditionalAnalysis(tmpdir=tmpdir)
     logger.info("Get top loci")
-    toploci = cc.get_top_loci(sumstatdf, plinkfile, chrom=chrom, **kwargs)
+    toploci = cc.get_top_loci(sumstatdf, plinkfile, chrom=chrom, **cond_conf)
     logging.info(f"Found: {toploci.shape[0]} top loci!")
 
     # Initialize the results
     cred_res = []
     logger.info("Exctract credible set")
-    for i, index_var in enumerate(toploci.to_dict(orient='records')):
+    for i, index_var in enumerate(toploci.to_dict(orient="records")):
         cred_set = cs.credible_set(index_var=index_var, sumstat=sumstatdf,
                                    toploci=toploci, plinkfile=plinkfile,
                                    prior_sd=1.0,
-                                   cs_prob=0.95, stype="quant", tmpdir=tmpdir
+                                   cs_prob=0.95, stype="quant", tmpdir=tmpdir,
+                                   **cond_conf
                                    )
         if cred_set.shape[0] > 0:
-            cred_set['index_var'] = index_var['ID']
-            cred_set['csid'] = f"{chrom}_{i}"
+            cred_set["index_var"] = index_var["ID"]
+            cred_set["csid"] = f"{chrom}_{i}"
             cred_res.append(cred_set)
 
     # Concatenate results
-    cred_res_df = pd.concat(cred_res, axis=0)
+    if len(cred_res) > 0:
+        cred_res_df = pd.concat(cred_res, axis=0)
+    else:
+        cred_res_df = []
 
-    return {'toploci': toploci, 'credible_set': cred_res_df}
+    return {"toploci": toploci, "credible_set": cred_res_df}
 
 
 def write_output(result_df, outfile="output.csv"):

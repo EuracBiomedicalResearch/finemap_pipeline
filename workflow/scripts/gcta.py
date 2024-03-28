@@ -33,7 +33,7 @@ class ConditionalAnalysis(object):
         try:
             self.cmdbin = kwargs.pop("gctabin")
         except KeyError:
-            self.cmdbin = 'gcta'
+            self.cmdbin = 'gcta64'
 
         try:
             tmpdir = kwargs.pop("tmpdir")
@@ -191,11 +191,14 @@ class ConditionalAnalysis(object):
 
         # Run the command
         self.run_cmd(**kwargs)
-        jmadf = self.read_file(outfile, ftype="jma")
+        try:
+            jmadf = self.read_file(outfile, ftype="jma")
 
-        # Get toploci SNP
-        sel_snps = jmadf["SNP"]
-        toploci = smstat.loc[smstat['ID'].isin(sel_snps), :]
+            # Get toploci SNP
+            sel_snps = jmadf["SNP"]
+            toploci = smstat.loc[smstat['ID'].isin(sel_snps), :]
+        except FileNotFoundError:
+            toploci = pd.DataFrame()
 
         # Remove temporary file
         logging.debug("Removing temporary file")
