@@ -18,6 +18,7 @@ def abf_scipy(beta, se, priorsd=1, log=False):
     else:
         return np.exp(abf)
 
+
 def abf(beta, se, priorsd=1, log=False):
     """This is much faster then the abf function using `logpdf` function
     from scipy.stats.
@@ -47,6 +48,7 @@ def abf(beta, se, priorsd=1, log=False):
 
     return abf
 
+
 def abf_core(z, se, priorsd=1, log=False):
     zscore2 = z**2
     se2 = se**2
@@ -60,6 +62,7 @@ def abf_core(z, se, priorsd=1, log=False):
         abf = t1 * np.exp(t2)
     return abf
 
+
 def abf_from_pval(pval, maf, n, priorsd=1, **kwargs):
     zscore = norm.ppf(pval / 2.0)
     se = np.sqrt(get_var(maf, n, **kwargs))
@@ -69,6 +72,7 @@ def abf_from_pval(pval, maf, n, priorsd=1, **kwargs):
         log = False
     abf = abf_core(zscore, se=se, priorsd=priorsd, log=log)
     return abf
+
 
 def get_var(maf, N, prop_cases=None, **kwargs):
     """Estimate variance of the phenotype based on the MAF.
@@ -87,16 +91,18 @@ def get_var(maf, N, prop_cases=None, **kwargs):
         if provided the computation expect to be a case-control study
 
     """
-    myden = 2 * N * maf * (1-maf)
+    myden = 2 * N * maf * (1 - maf)
     if prop_cases:
         myden *= prop_cases * (1 - prop_cases)
     return 1 / myden
+
 
 def estimate_prior(sdY, type="quant", prop_cases=None):
     if type == "bin":
         return sdY * 0.2
     else:
         return sdY * 0.15
+
 
 def log_sum(l):
     """
@@ -113,6 +119,7 @@ def log_sum(l):
     l_logsum = l_max + np.log(np.sum(np.exp(l - l_max)))
     return l_logsum
 
+
 def normalize_abf(abf, log=False):
     """Inspiration for this function comes from the `R gtx` package:
         https://github.com/tobyjohnson/gtx/blob/master/R/abf.R
@@ -124,19 +131,21 @@ def normalize_abf(abf, log=False):
         x = abf / abf.max(numeric_only=True)
     return x / np.sum(x)
 
+
 def compute_credible_set(sumstat_window, prior_sd=1, cs_prob=0.95, **kwargs):
     mydata = sumstat_window
     mydata['logABF'] = mydata.apply(lambda x: abf(beta=x["BETA_COND"],
-                                                     se=x["SE_COND"],
-                                                     priorsd=prior_sd,
-                                                     log=True),
+                                                  se=x["SE_COND"],
+                                                  priorsd=prior_sd,
+                                                  log=True),
                                     axis=1)
     mydata['normlogABF'] = normalize_abf(mydata['logABF'], log=True)
     mydata = mydata.sort_values(by="normlogABF", ascending=False)
     mydata['postProb'] = mydata['normlogABF'].cumsum()
-    mydata['is_95_cred'] = mydata['postProb'].transform(lambda x: x>=0.95)
-    mydata['is_99_cred'] = mydata['postProb'].transform(lambda x: x>=0.99)
+    mydata['is_95_cred'] = mydata['postProb'].transform(lambda x: x >= 0.95)
+    mydata['is_99_cred'] = mydata['postProb'].transform(lambda x: x >= 0.99)
     return mydata
+
 
 def get_key(key, argdict, default=None):
     """Get argument from kwargs
@@ -146,6 +155,7 @@ def get_key(key, argdict, default=None):
     except KeyError:
         myarg = default
     return myarg
+
 
 def credible_set(index_var, sumstat, toploci, plinkfile, prior_sd=1,
                  cs_prob=0.95, **kwargs):
@@ -187,9 +197,9 @@ def credible_set(index_var, sumstat, toploci, plinkfile, prior_sd=1,
     # Get region around the index snp
     # -------------------------------
     myreg = ((sumstat["CHROM"] == index_var["CHROM"]) &
-            (sumstat["GENPOS"] >= pos - (cojo_wind * 1000)) &
-            (sumstat["GENPOS"] <= pos + (cojo_wind * 1000))
-            )
+             (sumstat["GENPOS"] >= pos - (cojo_wind * 1000)) &
+             (sumstat["GENPOS"] <= pos + (cojo_wind * 1000))
+             )
     sumstat_wind = sumstat.loc[myreg, :]
 
     # Adjust p-value by condition beta and pvalue

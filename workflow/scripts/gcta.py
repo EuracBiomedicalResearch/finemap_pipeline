@@ -2,31 +2,31 @@ import subprocess as sb
 import numpy as np
 import json
 import os
-import pandas as pd
 from tempfile import mkdtemp
 import logging
 import shutil
+import pandas as pd
 
 
 class ConditionalAnalysis(object):
     def __init__(self, **kwargs):
         self.default_params = {'maf': {'flag': '--maf', 'value': '0.01'},
-                         'cojo_collinear': {
-                             'flag': '--cojo-collinear',
-                             'value': '0.9'},
-                         'cojo_p': {
-                             'flag': '--cojo-p',
-                             'value': str(5e-8)},
-                         'cojo_wind': {
-                             'flag': '--cojo-wind',
-                             'value': str(10000)},
-                         'extract': {
-                             'flag': '--extract',
-                             'value': None},
-                         'cojo_top_SNPs': {
-                             'flag': '--cojo-top-SNPs',
-                             'value': 10}
-                         }
+                               'cojo_collinear': {
+                               'flag': '--cojo-collinear',
+                               'value': '0.9'},
+                               'cojo_p': {
+                               'flag': '--cojo-p',
+                               'value': str(5e-8)},
+                               'cojo_wind': {
+                               'flag': '--cojo-wind',
+                               'value': str(10000)},
+                               'extract': {
+                               'flag': '--extract',
+                               'value': None},
+                               'cojo_top_SNPs': {
+                               'flag': '--cojo-top-SNPs',
+                               'value': 10}
+                               }
         # Set arguments at init of the class
         self._gctaparams = {}
         # self.set_args(**kwargs)
@@ -137,7 +137,8 @@ class ConditionalAnalysis(object):
                 'P': 'p'
             }
         )
-        sumstat = sumstat.loc[:, ['SNP', 'A1', 'A2', 'freq', 'b', 'se', 'p', 'N']]
+        sumstat = sumstat.loc[:, ['SNP', 'A1', 'A2', 'freq', 'b',
+                                  'se', 'p', 'N']]
 
         # Write Sumstat
         sumstat.to_csv(fout, sep='\t', index=None)
@@ -174,7 +175,6 @@ class ConditionalAnalysis(object):
         except KeyError:
             outfile = None
             pass
-
 
         if not outfile:
             outfile = os.path.join(self.tmpdir, "gcta_toploci_out")
@@ -235,7 +235,8 @@ class ConditionalAnalysis(object):
         if cond_list is None or len(cond_list) == 0:
             sm_cond = sumstat_wind.copy()
             sm_cond["BETA_COND"] = sm_cond['BETA']
-            sm_cond["PVAL_COND"] = 10**(-sm_cond["LOG10P"])
+            # sm_cond["PVAL_COND"] = 10**(-sm_cond["LOG10P"])
+            sm_cond["PVAL_COND"] = sm_cond["P"]
             sm_cond["SE_COND"] = sm_cond["SE"]
         else:
             self.reset_params()
@@ -253,7 +254,7 @@ class ConditionalAnalysis(object):
             # Write summary stat window to file
             retcode = self.regenie_to_gcta(sumstat_wind)
             params = {"extract": self.snplist,
-                      "cojo_cond": gcta_cond} # this key will go into gcta_cond
+                      "cojo_cond": gcta_cond}
 
             self.set_args(**params)
             # self._gctaparams['--extract'] = self.snplist
@@ -276,8 +277,9 @@ class ConditionalAnalysis(object):
             except FileNotFoundError:
                 print("Cannot find the file cma.cojo")
                 sm_cond = sumstat_wind.copy()
-                for cc in ['BETA_COND', 'PVAL_COND', 'SE_COND']:
-                    sm_cond[cc] = None
+                sm_cond["BETA_COND"] = sm_cond['BETA']
+                sm_cond["PVAL_COND"] = sm_cond["P"]
+                sm_cond["SE_COND"] = sm_cond["SE"]
 
         return sm_cond
 
@@ -353,5 +355,3 @@ def get_variant_to_cond(index_var, window_var, top_loci):
     condvar = winvar.intersection(toploci)
     condvar = list(condvar - set([index_var]))
     return condvar
-
-
